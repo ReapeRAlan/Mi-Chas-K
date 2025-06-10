@@ -9,7 +9,7 @@ from datetime import datetime
 # Create tables button
 if st.sidebar.button("Inicializar Base de Datos"):
     Base.metadata.create_all(bind=engine)
-    st.sidebar.success("Tablas creadas")
+                        "cantidad": 1,
 
 st.sidebar.title("Mi-Chas-K POS")
 page = st.sidebar.radio("Ir a", ["Tienda", "Carrito", "Admin"])
