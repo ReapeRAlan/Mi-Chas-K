@@ -1,7 +1,6 @@
 import streamlit as st
 from database import SessionLocal, engine
 from models import Base, Categoria, Producto, Pedido, ItemPedido
-from sqlalchemy.orm import Session
 from datetime import datetime
 
 # Create tables button

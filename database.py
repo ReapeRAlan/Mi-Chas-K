@@ -5,14 +5,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Retrieve DATABASE_URL. Some hosting panels may append accidental whitespace,
-# which would result in connection attempts to a non‑existent database name
+# Retrieve DATABASE_URL and strip any accidental whitespace.
 raw_url = os.getenv("DATABASE_URL")
 
 if raw_url:
     DATABASE_URL = raw_url.strip()
 else:
-    # Fall back to individual credentials, making sure each is stripped
+    # Build from individual credentials, stripping whitespace from each piece.
     user = os.getenv("DB_USER", "").strip()
     password = os.getenv("DB_PASS", "").strip()
     host = os.getenv("DB_HOST", "").strip()
