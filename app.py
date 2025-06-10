@@ -1,15 +1,12 @@
 import streamlit as st
 from database import SessionLocal, engine
 from models import Base, Categoria, Producto, Pedido, ItemPedido
-
 from sqlalchemy.orm import Session
-
 from datetime import datetime
 
-# Create tables button
+# Botón para inicializar la base de datos
 if st.sidebar.button("Inicializar Base de Datos"):
     Base.metadata.create_all(bind=engine)
-                        "cantidad": 1,
 
 st.sidebar.title("Mi-Chas-K POS")
 page = st.sidebar.radio("Ir a", ["Tienda", "Carrito", "Admin"])
@@ -19,8 +16,7 @@ if "cart" not in st.session_state:
 
 session = SessionLocal()
 
-
-pñm if page == "Tienda":
+if page == "Tienda":
     categorias = session.query(Categoria).all()
     for cat in categorias:
         st.header(f"{cat.emoji} {cat.nombre}")
@@ -77,9 +73,9 @@ elif page == "Admin":
         data.append({
             "ID": p.id,
             "Fecha": p.fecha.strftime("%Y-%m-%d %H:%M"),
-            "Cliente": p.cliente,
+            "Cliente": getattr(p, "cliente", ""),  # Ajusta si 'cliente' no existe
             "Total": p.total,
-            "Items": len(p.items),
+            "Items": len(p.items) if hasattr(p, "items") else 0,
         })
     st.table(data)
 
