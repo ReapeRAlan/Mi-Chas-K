@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL") or (
+# Grab the URL and strip spaces to avoid connection errors due to trailing
+# whitespace in environment variables.
+raw_url = os.getenv("DATABASE_URL", "").strip()
+DATABASE_URL = raw_url or (
     f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@"
     f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/"
     f"{os.getenv('DB_NAME')}"
