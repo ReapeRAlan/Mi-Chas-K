@@ -1,6 +1,9 @@
 import streamlit as st
 from database import SessionLocal, engine
 from models import Base, Categoria, Producto, Pedido, ItemPedido
+
+from sqlalchemy.orm import Session
+
 from datetime import datetime
 
 # Create tables button
@@ -16,7 +19,8 @@ if "cart" not in st.session_state:
 
 session = SessionLocal()
 
-if page == "Tienda":
+
+pñm if page == "Tienda":
     categorias = session.query(Categoria).all()
     for cat in categorias:
         st.header(f"{cat.emoji} {cat.nombre}")
