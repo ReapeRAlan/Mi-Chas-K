@@ -207,10 +207,46 @@ class Categoria:
     @classmethod
     def get_all(cls, activas_solamente: bool = True) -> List['Categoria']:
         """Obtiene todas las categorías"""
-        # Para PostgreSQL, usar categorías distintas de productos
-        query = "SELECT DISTINCT categoria as nombre FROM productos WHERE activo = TRUE ORDER BY categoria"
+        if activas_solamente:
+            query = "SELECT * FROM categorias WHERE activo = TRUE ORDER BY nombre"
+        else:
+            query = "SELECT * FROM categorias ORDER BY nombre"
+        
         rows = execute_query(query)
-        return [cls(nombre=row['nombre']) for row in rows]
+        categorias = []
+        for row in rows:
+            data = dict(row)
+            categorias.append(cls(**data))
+        return categorias
+    
+    @classmethod  
+    def get_nombres_categoria(cls) -> List[str]:
+        """Obtiene solo los nombres de categorías activas para productos"""
+        query = "SELECT nombre FROM categorias WHERE activo = TRUE ORDER BY nombre"
+        rows = execute_query(query)
+        return [row['nombre'] for row in rows]
+    
+    def save(self) -> int:
+        """Guarda o actualiza la categoría"""
+        if self.id is None:
+            # Insertar nueva categoría
+            query = """
+                INSERT INTO categorias (nombre, descripcion, activo)
+                VALUES (%s, %s, %s)
+                RETURNING id
+            """
+            params = (self.nombre, self.descripcion, self.activo)
+            self.id = execute_update(query, params)
+        else:
+            # Actualizar categoría existente
+            query = """
+                UPDATE categorias 
+                SET nombre = %s, descripcion = %s, activo = %s
+                WHERE id = %s
+            """
+            params = (self.nombre, self.descripcion, self.activo, self.id)
+            execute_update(query, params)
+        return self.id or 0
 
 @dataclass  
 class ItemCarrito:

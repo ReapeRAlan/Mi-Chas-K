@@ -162,9 +162,9 @@ def mostrar_config_sistema():
         
         # Contar registros
         try:
-            productos_count = execute_query("SELECT COUNT(*) as count FROM productos WHERE activo = 1")[0]['count']
+            productos_count = execute_query("SELECT COUNT(*) as count FROM productos WHERE activo = TRUE")[0]['count']
             ventas_count = execute_query("SELECT COUNT(*) as count FROM ventas")[0]['count']
-            categorias_count = execute_query("SELECT COUNT(*) as count FROM categorias WHERE activo = 1")[0]['count']
+            categorias_count = execute_query("SELECT COUNT(*) as count FROM categorias WHERE activo = TRUE")[0]['count']
             
             st.metric("Productos activos", productos_count)
             st.metric("Total de ventas", ventas_count)

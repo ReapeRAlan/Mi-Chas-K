@@ -33,8 +33,8 @@ def mostrar_lista_productos():
     col1, col2 = st.columns(2)
     
     with col1:
-        categorias = Categoria.get_all()
-        categoria_names = ["Todas"] + [cat.nombre for cat in categorias]
+        categorias = Categoria.get_nombres_categoria()
+        categoria_names = ["Todas"] + categorias
         categoria_filtro = st.selectbox("Filtrar por categoría:", categoria_names)
     
     with col2:
@@ -101,8 +101,7 @@ def mostrar_formulario_edicion(producto_id: int):
             nuevo_stock = st.number_input("Stock:", value=producto.stock, min_value=0, step=1)
         
         with col2:
-            categorias = Categoria.get_all()
-            categoria_names = [cat.nombre for cat in categorias]
+            categoria_names = Categoria.get_nombres_categoria()
             categoria_actual_idx = categoria_names.index(producto.categoria) if producto.categoria in categoria_names else 0
             
             nueva_categoria = st.selectbox("Categoría:", categoria_names, index=categoria_actual_idx)
@@ -158,9 +157,12 @@ def mostrar_formulario_producto():
             stock = st.number_input("Stock inicial", min_value=0, value=0, step=1)
         
         with col2:
-            categorias = Categoria.get_all()
-            categoria_names = [cat.nombre for cat in categorias]
-            categoria = st.selectbox("Categoría", categoria_names)
+            categoria_names = Categoria.get_nombres_categoria()
+            if not categoria_names:
+                st.warning("No hay categorías disponibles. Agrega una categoría primero.")
+                categoria = ""
+            else:
+                categoria = st.selectbox("Categoría", categoria_names)
             codigo_barras = st.text_input("Código de barras (opcional)")
         
         descripcion = st.text_area("Descripción (opcional)")
@@ -212,20 +214,22 @@ def mostrar_gestion_categorias():
                 st.write(f"{estado} **{categoria.nombre}** - {categoria.descripcion}")
             
             with col2:
+                # Generar key única usando índice y nombre
+                key_base = f"{categoria.nombre}_{categorias.index(categoria)}" if categoria.id is None else categoria.id
                 if categoria.activo:
-                    if st.button(f"Desactivar", key=f"deactivate_{categoria.id}"):
+                    if st.button(f"Desactivar", key=f"deactivate_{key_base}"):
                         try:
                             from database.connection import execute_update
-                            execute_update("UPDATE categorias SET activo = 0 WHERE id = %s", (categoria.id,))
+                            execute_update("UPDATE categorias SET activo = FALSE WHERE id = %s", (categoria.id,))
                             show_success_message(f"Categoría '{categoria.nombre}' desactivada")
                             st.rerun()
                         except Exception as e:
                             show_error_message(f"Error: {str(e)}")
                 else:
-                    if st.button(f"Activar", key=f"activate_{categoria.id}"):
+                    if st.button(f"Activar", key=f"activate_{key_base}"):
                         try:
                             from database.connection import execute_update
-                            execute_update("UPDATE categorias SET activo = 1 WHERE id = %s", (categoria.id,))
+                            execute_update("UPDATE categorias SET activo = TRUE WHERE id = %s", (categoria.id,))
                             show_success_message(f"Categoría '{categoria.nombre}' activada")
                             st.rerun()
                         except Exception as e:

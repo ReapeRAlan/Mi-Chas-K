@@ -36,8 +36,8 @@ def mostrar_productos():
     st.subheader("📦 Productos Disponibles")
     
     # Filtro por categoría
-    categorias = Categoria.get_all()
-    categoria_names = ["Todas"] + [cat.nombre for cat in categorias]
+    categorias = Categoria.get_nombres_categoria()
+    categoria_names = ["Todas"] + categorias
     
     categoria_seleccionada = st.selectbox(
         "Filtrar por categoría:",

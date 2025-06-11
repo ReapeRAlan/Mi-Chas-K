@@ -237,6 +237,22 @@ def init_database():
                         VALUES (%s, %s, %s, %s, %s)
                     """, productos)
                     
+                    # Insertar categorías iniciales basadas en los productos
+                    categorias = [
+                        ('Chascas', 'Nuestros productos principales: chascas tradicionales'),
+                        ('DoriChascas', 'Chascas especiales con frituras'),
+                        ('Empapelados', 'Tortillas rellenas y empapeladas'),
+                        ('Elotes', 'Elotes preparados en diferentes estilos'),
+                        ('Especialidades', 'Productos especiales y combinaciones únicas'),
+                        ('Extras', 'Porciones adicionales y complementos')
+                    ]
+                    
+                    cursor.executemany("""
+                        INSERT INTO categorias (nombre, descripcion) 
+                        VALUES (%s, %s) 
+                        ON CONFLICT (nombre) DO NOTHING
+                    """, categorias)
+                    
                     # Insertar configuraciones básicas
                     configuraciones = [
                         ('nombre_negocio', 'MiChaska', 'Nombre del negocio'),
