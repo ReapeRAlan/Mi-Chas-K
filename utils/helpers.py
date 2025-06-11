@@ -4,10 +4,12 @@ Funciones auxiliares para el sistema de facturación
 import streamlit as st
 from datetime import datetime, timedelta
 from typing import Optional, Union
+from decimal import Decimal
 
-def format_currency(amount: float, currency: str = "MXN") -> str:
+def format_currency(amount: Union[float, Decimal, str], currency: str = "MXN") -> str:
     """Formatea un monto como moneda"""
-    return f"${amount:.2f} {currency}"
+    safe_amount = safe_float_conversion(amount)
+    return f"${safe_amount:.2f} {currency}"
 
 def format_datetime(dt: Union[datetime, str, None], format_str: str = "%d/%m/%Y %H:%M") -> str:
     """Formatea una fecha y hora"""
@@ -166,3 +168,14 @@ def apply_discount(total: float, discount_percentage: float) -> tuple[float, flo
     discount_amount = total * (discount_percentage / 100)
     new_total = total - discount_amount
     return new_total, discount_amount
+
+def safe_float_conversion(value) -> float:
+    """Conversión segura de cualquier tipo numérico a float"""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.replace(',', '.'))
+        except ValueError:
+            return 0.0
+    return float(value) if value is not None else 0.0

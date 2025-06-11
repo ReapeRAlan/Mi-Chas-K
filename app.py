@@ -10,6 +10,16 @@ from dotenv import load_dotenv
 # Cargar variables de entorno
 load_dotenv()
 
+# Configurar logging
+sys.path.append(os.path.dirname(__file__))
+try:
+    from utils.logging_config import setup_logging
+    logger = setup_logging()
+except ImportError:
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
 # Configurar la página
 st.set_page_config(
     page_title="MiChaska - Sistema de Facturación",
@@ -42,23 +52,28 @@ def init_app():
     # Solo inicializar una vez por sesión
     if 'db_initialized' not in st.session_state:
         try:
+            logger.info("🚀 Iniciando aplicación MiChaska...")
             # Intentar importar y configurar la base de datos
             from database.connection import init_database
             init_database()
             
             # Marcar como inicializada
             st.session_state.db_initialized = True
+            logger.info("✅ Aplicación inicializada correctamente")
             
         except ImportError as e:
+            logger.error(f"❌ Error al importar módulos de base de datos: {str(e)}")
             st.error(f"❌ Error al importar módulos de base de datos: {str(e)}")
             st.info("🔧 Verifica que todas las dependencias estén instaladas")
             st.stop()
         except Exception as e:
+            logger.error(f"❌ Error al conectar con la base de datos: {str(e)}")
             st.error(f"❌ Error al conectar con la base de datos: {str(e)}")
             st.info("🔧 Verifica que las variables de entorno estén configuradas correctamente")
             
             # En desarrollo, continuar sin base de datos
             if os.getenv('DATABASE_URL') is None:
+                logger.warning("⚠️ Ejecutando en modo desarrollo sin base de datos")
                 st.warning("⚠️ Ejecutando en modo desarrollo sin base de datos")
             else:
                 st.stop()

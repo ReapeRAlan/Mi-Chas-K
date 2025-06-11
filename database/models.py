@@ -35,14 +35,21 @@ class Producto:
         query += " ORDER BY categoria, nombre"
         
         rows = execute_query(query)
-        return [cls(**dict(row)) for row in rows]
+        productos = []
+        for row in rows:
+            data = dict(row)
+            data['precio'] = safe_float(data.get('precio', 0))
+            productos.append(cls(**data))
+        return productos
     
     @classmethod
     def get_by_id(cls, producto_id: int) -> Optional['Producto']:
         """Obtiene un producto por ID"""
         rows = execute_query("SELECT * FROM productos WHERE id = %s", (producto_id,))
         if rows:
-            return cls(**dict(rows[0]))
+            data = dict(rows[0])
+            data['precio'] = safe_float(data.get('precio', 0))
+            return cls(**data)
         return None
     
     @classmethod
@@ -52,7 +59,12 @@ class Producto:
             "SELECT * FROM productos WHERE categoria = %s AND activo = TRUE ORDER BY nombre", 
             (categoria,)
         )
-        return [cls(**dict(row)) for row in rows]
+        productos = []
+        for row in rows:
+            data = dict(row)
+            data['precio'] = safe_float(data.get('precio', 0))
+            productos.append(cls(**data))
+        return productos
     
     def save(self) -> int:
         """Guarda o actualiza el producto"""
@@ -100,21 +112,42 @@ class Venta:
     def get_all(cls) -> List['Venta']:
         """Obtiene todas las ventas"""
         rows = execute_query("SELECT * FROM ventas ORDER BY fecha DESC")
-        return [cls(**dict(row)) for row in rows]
+        ventas = []
+        for row in rows:
+            data = dict(row)
+            data['total'] = safe_float(data.get('total', 0))
+            data['descuento'] = safe_float(data.get('descuento', 0))
+            data['impuestos'] = safe_float(data.get('impuestos', 0))
+            ventas.append(cls(**data))
+        return ventas
     
     @classmethod
     def get_by_fecha(cls, fecha_inicio: str, fecha_fin: str) -> List['Venta']:
         """Obtiene ventas por rango de fechas"""
         query = "SELECT * FROM ventas WHERE DATE(fecha) BETWEEN %s AND %s ORDER BY fecha DESC"
         rows = execute_query(query, (fecha_inicio, fecha_fin))
-        return [cls(**dict(row)) for row in rows]
+        ventas = []
+        for row in rows:
+            data = dict(row)
+            data['total'] = safe_float(data.get('total', 0))
+            data['descuento'] = safe_float(data.get('descuento', 0))
+            data['impuestos'] = safe_float(data.get('impuestos', 0))
+            ventas.append(cls(**data))
+        return ventas
     
     @classmethod
     def get_ventas_hoy(cls) -> List['Venta']:
         """Obtiene las ventas del día actual"""
         query = "SELECT * FROM ventas WHERE DATE(fecha) = CURRENT_DATE ORDER BY fecha DESC"
         rows = execute_query(query)
-        return [cls(**dict(row)) for row in rows]
+        ventas = []
+        for row in rows:
+            data = dict(row)
+            data['total'] = safe_float(data.get('total', 0))
+            data['descuento'] = safe_float(data.get('descuento', 0))
+            data['impuestos'] = safe_float(data.get('impuestos', 0))
+            ventas.append(cls(**data))
+        return ventas
     
     def save(self) -> int:
         """Guarda la venta"""
