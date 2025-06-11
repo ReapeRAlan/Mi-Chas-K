@@ -21,7 +21,7 @@ DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'database': os.getenv('DB_NAME', 'chaskabd'),
     'user': os.getenv('DB_USER', 'admin'),
-    'password': os.getenv('DB_PASS', ''),
+    'password': os.getenv('DB_PASSWORD', ''),
     'port': int(os.getenv('DB_PORT', '5432'))
 }
 
@@ -35,9 +35,11 @@ def get_db_connection() -> Generator[psycopg2.extensions.connection, None, None]
     try:
         if DATABASE_URL:
             # Usar URL completa si está disponible (Render)
+            logger.info(f"Conectando con DATABASE_URL...")
             conn = psycopg2.connect(DATABASE_URL)
         else:
             # Usar configuración individual (desarrollo local)
+            logger.info(f"Conectando con configuración individual: {DB_CONFIG['host']}")
             conn = psycopg2.connect(**DB_CONFIG)
         
         conn.autocommit = False
@@ -88,8 +90,12 @@ def execute_update(query: str, params: tuple = ()) -> Optional[int]:
 def init_database():
     """Inicializar la base de datos con las tablas necesarias para PostgreSQL"""
     try:
+        logger.info("Iniciando inicialización de base de datos...")
+        
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
+                logger.info("Conectado exitosamente, creando tablas...")
+                
                 # Crear tabla de categorías
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS categorias (
@@ -154,11 +160,17 @@ def init_database():
                     )
                 """)
                 
+                logger.info("Tablas creadas exitosamente, verificando datos...")
+                
                 # Verificar si ya hay datos iniciales
                 cursor.execute("SELECT COUNT(*) FROM productos")
-                count = cursor.fetchone()[0]
+                result = cursor.fetchone()
+                count = result[0] if result else 0
+                
+                logger.info(f"Productos existentes: {count}")
                 
                 if count == 0:
+                    logger.info("Insertando datos iniciales...")
                     # Insertar productos del menú MiChaska
                     productos = [
                         # Chascas
@@ -224,10 +236,15 @@ def init_database():
                         ('mensaje_ticket', 'Gracias por su compra', 'Mensaje en los tickets')
                     ]
                     
-                    cursor.executemany("""
-                        INSERT INTO configuracion (clave, valor, descripcion) 
-                        VALUES (%s, %s, %s)
-                    """, configuraciones)
+                    # Verificar si las configuraciones ya existen
+                    for clave, valor, desc in configuraciones:
+                        cursor.execute("""
+                            INSERT INTO configuracion (clave, valor, descripcion) 
+                            VALUES (%s, %s, %s) 
+                            ON CONFLICT (clave) DO NOTHING
+                        """, (clave, valor, desc))
+                    
+                    logger.info("Datos iniciales insertados exitosamente")
                 
                 conn.commit()
                 logger.info("Base de datos PostgreSQL inicializada correctamente")
