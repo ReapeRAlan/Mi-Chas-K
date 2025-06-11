@@ -39,28 +39,29 @@ st.set_page_config(
 # Inicializar la base de datos
 def init_app():
     """Inicializa la aplicación y la base de datos"""
-    try:
-        # Intentar importar y configurar la base de datos
-        from database.connection import init_database
-        init_database()
-        
-        # Mostrar mensaje de éxito solo si no hay error
-        if 'db_initialized' not in st.session_state:
+    # Solo inicializar una vez por sesión
+    if 'db_initialized' not in st.session_state:
+        try:
+            # Intentar importar y configurar la base de datos
+            from database.connection import init_database
+            init_database()
+            
+            # Marcar como inicializada
             st.session_state.db_initialized = True
             
-    except ImportError as e:
-        st.error(f"❌ Error al importar módulos de base de datos: {str(e)}")
-        st.info("🔧 Verifica que todas las dependencias estén instaladas")
-        st.stop()
-    except Exception as e:
-        st.error(f"❌ Error al conectar con la base de datos: {str(e)}")
-        st.info("🔧 Verifica que las variables de entorno estén configuradas correctamente")
-        
-        # En desarrollo, continuar sin base de datos
-        if os.getenv('DATABASE_URL') is None:
-            st.warning("⚠️ Ejecutando en modo desarrollo sin base de datos")
-        else:
+        except ImportError as e:
+            st.error(f"❌ Error al importar módulos de base de datos: {str(e)}")
+            st.info("🔧 Verifica que todas las dependencias estén instaladas")
             st.stop()
+        except Exception as e:
+            st.error(f"❌ Error al conectar con la base de datos: {str(e)}")
+            st.info("🔧 Verifica que las variables de entorno estén configuradas correctamente")
+            
+            # En desarrollo, continuar sin base de datos
+            if os.getenv('DATABASE_URL') is None:
+                st.warning("⚠️ Ejecutando en modo desarrollo sin base de datos")
+            else:
+                st.stop()
 
 def main():
     """Función principal de la aplicación"""

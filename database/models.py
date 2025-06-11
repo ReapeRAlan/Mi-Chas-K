@@ -4,7 +4,14 @@ Modelos de datos para el sistema de facturación - PostgreSQL
 from dataclasses import dataclass
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 from database.connection import execute_query, execute_update
+
+def safe_float(value) -> float:
+    """Convierte de forma segura cualquier valor numérico a float"""
+    if isinstance(value, Decimal):
+        return float(value)
+    return float(value) if value is not None else 0.0
 
 @dataclass
 class Producto:
@@ -180,7 +187,7 @@ class ItemCarrito:
     @property
     def subtotal(self) -> float:
         """Calcula el subtotal del item"""
-        return self.producto.precio * self.cantidad
+        return safe_float(self.producto.precio) * self.cantidad
 
 class Carrito:
     def __init__(self):
@@ -218,7 +225,7 @@ class Carrito:
     @property
     def total(self) -> float:
         """Calcula el total del carrito"""
-        return sum(item.subtotal for item in self.items)
+        return safe_float(sum(item.subtotal for item in self.items))
     
     @property
     def cantidad_items(self) -> int:

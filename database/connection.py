@@ -28,6 +28,9 @@ DB_CONFIG = {
 # También soportar DATABASE_URL completa
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+# Variable global para evitar múltiples inicializaciones
+_database_initialized = False
+
 @contextmanager
 def get_db_connection() -> Generator[psycopg2.extensions.connection, None, None]:
     """Context manager para conexiones a la base de datos PostgreSQL"""
@@ -89,6 +92,13 @@ def execute_update(query: str, params: tuple = ()) -> Optional[int]:
 
 def init_database():
     """Inicializar la base de datos con las tablas necesarias para PostgreSQL"""
+    global _database_initialized
+    
+    # Evitar múltiples inicializaciones
+    if _database_initialized:
+        logger.info("Base de datos ya inicializada, omitiendo...")
+        return
+        
     try:
         logger.info("Iniciando inicialización de base de datos...")
         
@@ -248,6 +258,7 @@ def init_database():
                 
                 conn.commit()
                 logger.info("Base de datos PostgreSQL inicializada correctamente")
+                _database_initialized = True
                 
     except Exception as e:
         logger.error(f"Error inicializando la base de datos: {e}")
