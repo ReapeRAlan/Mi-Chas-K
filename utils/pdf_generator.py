@@ -19,7 +19,7 @@ class TicketGenerator:
         
     def get_configuracion(self, clave: str, default: str = "") -> str:
         """Obtiene un valor de configuración"""
-        rows = execute_query("SELECT valor FROM configuracion WHERE clave = ?", (clave,))
+        rows = execute_query("SELECT valor FROM configuracion WHERE clave = %s", (clave,))
         return rows[0]['valor'] if rows else default
     
     def generar_ticket(self, venta: Venta, ruta_salida: str = None) -> str:

@@ -72,7 +72,7 @@ def mostrar_config_negocio():
                 
                 for clave, valor in configuraciones.items():
                     execute_update(
-                        "UPDATE configuracion SET valor = ? WHERE clave = ?",
+                        "UPDATE configuracion SET valor = %s WHERE clave = %s",
                         (valor, clave)
                     )
                 
@@ -138,9 +138,10 @@ def mostrar_config_facturacion():
                 }
                 
                 for clave, valor in configuraciones.items():
-                    # Insertar o actualizar
+                    # Insertar o actualizar usando UPSERT de PostgreSQL
                     execute_update(
-                        "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)",
+                        """INSERT INTO configuracion (clave, valor) VALUES (%s, %s) 
+                           ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor""",
                         (clave, valor)
                     )
                 
@@ -203,7 +204,7 @@ def mostrar_config_sistema():
                     
                     # Contar ventas que se van a eliminar
                     ventas_a_eliminar = execute_query(
-                        "SELECT COUNT(*) as count FROM ventas WHERE date(fecha) < ?",
+                        "SELECT COUNT(*) as count FROM ventas WHERE DATE(fecha) < %s",
                         (fecha_str,)
                     )[0]['count']
                     
@@ -212,13 +213,13 @@ def mostrar_config_sistema():
                     else:
                         # Primero eliminar detalles de venta
                         execute_update(
-                            "DELETE FROM detalle_ventas WHERE venta_id IN (SELECT id FROM ventas WHERE date(fecha) < ?)",
+                            "DELETE FROM detalle_ventas WHERE venta_id IN (SELECT id FROM ventas WHERE DATE(fecha) < %s)",
                             (fecha_str,)
                         )
                         
                         # Luego eliminar ventas
                         execute_update(
-                            "DELETE FROM ventas WHERE date(fecha) < ?",
+                            "DELETE FROM ventas WHERE DATE(fecha) < %s",
                             (fecha_str,)
                         )
                         
@@ -258,7 +259,8 @@ def mostrar_config_sistema():
                 
                 for clave, valor in configuraciones.items():
                     execute_update(
-                        "INSERT OR REPLACE INTO configuracion (clave, valor) VALUES (?, ?)",
+                        """INSERT INTO configuracion (clave, valor) VALUES (%s, %s) 
+                           ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor""",
                         (clave, valor)
                     )
                 
@@ -329,13 +331,13 @@ def mostrar_dialogo_limpieza():
                 
                 # Primero eliminar detalles de venta
                 execute_update(
-                    "DELETE FROM detalle_ventas WHERE venta_id IN (SELECT id FROM ventas WHERE fecha < ?)",
+                    "DELETE FROM detalle_ventas WHERE venta_id IN (SELECT id FROM ventas WHERE fecha < %s)",
                     (fecha_limite.isoformat(),)
                 )
                 
                 # Luego eliminar ventas
                 resultado = execute_update(
-                    "DELETE FROM ventas WHERE fecha < ?",
+                    "DELETE FROM ventas WHERE fecha < %s",
                     (fecha_limite.isoformat(),)
                 )
                 

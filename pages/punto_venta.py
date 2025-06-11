@@ -215,7 +215,7 @@ def mostrar_formulario_venta():
                     if descuento_monto > 0:
                         from database.connection import execute_update
                         execute_update(
-                            "UPDATE ventas SET total = ?, descuento = ? WHERE id = ?",
+                            "UPDATE ventas SET total = %s, descuento = %s WHERE id = %s",
                             (total_final, descuento_monto, venta.id)
                         )
                         venta.total = total_final

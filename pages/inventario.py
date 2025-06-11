@@ -216,7 +216,7 @@ def mostrar_gestion_categorias():
                     if st.button(f"Desactivar", key=f"deactivate_{categoria.id}"):
                         try:
                             from database.connection import execute_update
-                            execute_update("UPDATE categorias SET activo = 0 WHERE id = ?", (categoria.id,))
+                            execute_update("UPDATE categorias SET activo = 0 WHERE id = %s", (categoria.id,))
                             show_success_message(f"Categoría '{categoria.nombre}' desactivada")
                             st.rerun()
                         except Exception as e:
@@ -225,7 +225,7 @@ def mostrar_gestion_categorias():
                     if st.button(f"Activar", key=f"activate_{categoria.id}"):
                         try:
                             from database.connection import execute_update
-                            execute_update("UPDATE categorias SET activo = 1 WHERE id = ?", (categoria.id,))
+                            execute_update("UPDATE categorias SET activo = 1 WHERE id = %s", (categoria.id,))
                             show_success_message(f"Categoría '{categoria.nombre}' activada")
                             st.rerun()
                         except Exception as e:
@@ -253,7 +253,7 @@ def mostrar_gestion_categorias():
             try:
                 from database.connection import execute_update
                 execute_update(
-                    "INSERT INTO categorias (nombre, descripcion) VALUES (?, ?)",
+                    "INSERT INTO categorias (nombre, descripcion) VALUES (%s, %s)",
                     (nombre_categoria.strip(), descripcion_categoria.strip())
                 )
                 show_success_message(f"Categoría '{nombre_categoria}' agregada exitosamente")
