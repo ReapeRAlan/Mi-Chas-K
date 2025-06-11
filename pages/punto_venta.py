@@ -2,6 +2,7 @@
 Página principal del punto de venta
 """
 import streamlit as st
+from datetime import datetime
 from database.models import Producto, Categoria, Carrito
 from utils.helpers import (
     format_currency, initialize_session_state, show_success_message,
@@ -244,47 +245,28 @@ def mostrar_opciones_post_venta(venta):
     """Muestra opciones después de procesar una venta"""
     st.success(f"✅ Venta #{venta.id} procesada exitosamente!")
     
-    # Generar ticket automáticamente
-    if not st.session_state.get('ticket_generado', False):
-        with st.spinner("Generando ticket..."):
-            try:
-                generator = TicketGenerator()
-                ruta_ticket = generator.generar_ticket(venta)
-                st.session_state.ruta_ticket = ruta_ticket
-                st.session_state.ticket_generado = True
-                st.success("🧾 Ticket generado automáticamente!")
-            except Exception as e:
-                st.error(f"❌ Error al generar ticket: {str(e)}")
-                st.session_state.ticket_generado = False
-    
     # Mostrar opciones
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Mostrar botón de descarga si el ticket fue generado
-        if st.session_state.get('ticket_generado', False) and st.session_state.get('ruta_ticket'):
+        # Generar y descargar ticket directamente en memoria
+        if st.button("📥 Descargar Ticket", use_container_width=True):
             try:
-                with open(st.session_state.ruta_ticket, "rb") as file:
+                with st.spinner("Generando ticket..."):
+                    generator = TicketGenerator()
+                    pdf_bytes = generator.generar_ticket_memoria(venta)
+                    
                     st.download_button(
-                        label="📥 Descargar Ticket",
-                        data=file.read(),
-                        file_name=f"ticket_{venta.id}.pdf",
+                        label="📥 Ticket Generado - Hacer clic para descargar",
+                        data=pdf_bytes,
+                        file_name=f"ticket_{venta.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                         mime="application/pdf",
                         use_container_width=True
                     )
+                    show_success_message("¡Ticket generado exitosamente! Haz clic en el botón de descarga.")
+                    
             except Exception as e:
-                st.error(f"Error al preparar descarga: {str(e)}")
-        else:
-            if st.button("🖨️ Generar Ticket", use_container_width=True):
-                try:
-                    generator = TicketGenerator()
-                    ruta_ticket = generator.generar_ticket(venta)
-                    st.session_state.ruta_ticket = ruta_ticket
-                    st.session_state.ticket_generado = True
-                    show_success_message("Ticket generado exitosamente!")
-                    st.rerun()
-                except Exception as e:
-                    show_error_message(f"Error al generar ticket: {str(e)}")
+                show_error_message(f"Error al generar ticket: {str(e)}")
     
     with col2:
         if st.button("🛒 Nueva Venta", use_container_width=True):

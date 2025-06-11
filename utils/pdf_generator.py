@@ -9,6 +9,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib import colors
 from datetime import datetime
 import os
+import io
 from database.models import Venta, DetalleVenta, Producto
 from database.connection import execute_query
 
@@ -22,21 +23,23 @@ class TicketGenerator:
         rows = execute_query("SELECT valor FROM configuracion WHERE clave = %s", (clave,))
         return rows[0]['valor'] if rows else default
     
-    def generar_ticket(self, venta: Venta, ruta_salida: str = None) -> str:
-        """Genera un ticket PDF para la venta"""
-        if ruta_salida is None:
-            os.makedirs("tickets", exist_ok=True)
-            ruta_salida = f"tickets/ticket_{venta.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    def generar_ticket_memoria(self, venta: Venta) -> bytes:
+        """Genera un ticket PDF en memoria y devuelve los bytes"""
+        # Crear buffer en memoria
+        buffer = io.BytesIO()
         
-        # Crear documento
+        # Crear documento en memoria
         doc = SimpleDocTemplate(
-            ruta_salida,
+            buffer,
             pagesize=(self.width, self.height),
             leftMargin=5*mm,
             rightMargin=5*mm,
             topMargin=5*mm,
             bottomMargin=5*mm
         )
+        
+        # Contenido del ticket
+        story = []
         
         # Estilos
         styles = getSampleStyleSheet()
@@ -50,18 +53,18 @@ class TicketGenerator:
             textColor=colors.black
         )
         
-        style_info = ParagraphStyle(
-            'InfoTicket',
+        style_subtitulo = ParagraphStyle(
+            'SubtituloTicket',
             parent=styles['Normal'],
-            fontSize=8,
+            fontSize=10,
             alignment=TA_CENTER,
             spaceAfter=2*mm
         )
         
-        style_detalle = ParagraphStyle(
-            'DetalleTicket',
+        style_normal = ParagraphStyle(
+            'NormalTicket',
             parent=styles['Normal'],
-            fontSize=8,
+            fontSize=9,
             alignment=TA_LEFT,
             spaceAfter=1*mm
         )
@@ -69,95 +72,120 @@ class TicketGenerator:
         style_total = ParagraphStyle(
             'TotalTicket',
             parent=styles['Normal'],
-            fontSize=10,
-            alignment=TA_RIGHT,
-            spaceAfter=2*mm,
+            fontSize=12,
+            alignment=TA_CENTER,
+            spaceAfter=3*mm,
             textColor=colors.black
         )
         
-        # Contenido del ticket
-        story = []
-        
         # Encabezado
         nombre_negocio = self.get_configuracion('nombre_negocio', 'MiChaska')
+        story.append(Paragraph(nombre_negocio, style_titulo))
+        
         direccion = self.get_configuracion('direccion', '')
-        telefono = self.get_configuracion('telefono', '')
-        
-        story.append(Paragraph(f"<b>{nombre_negocio}</b>", style_titulo))
-        
         if direccion:
-            story.append(Paragraph(direccion, style_info))
-        if telefono:
-            story.append(Paragraph(f"Tel: {telefono}", style_info))
+            story.append(Paragraph(direccion, style_subtitulo))
         
-        # Línea separadora
-        story.append(Paragraph("=" * 40, style_info))
+        telefono = self.get_configuracion('telefono', '')
+        if telefono:
+            story.append(Paragraph(f"Tel: {telefono}", style_subtitulo))
+        
+        story.append(Spacer(1, 3*mm))
+        story.append(Paragraph("=" * 30, style_normal))
+        story.append(Spacer(1, 2*mm))
         
         # Información de la venta
-        if isinstance(venta.fecha, str):
-            fecha_venta = datetime.fromisoformat(venta.fecha)
-        elif venta.fecha is not None:
-            fecha_venta = venta.fecha
+        story.append(Paragraph(f"<b>Ticket #{venta.id}</b>", style_normal))
+        if venta.fecha:
+            story.append(Paragraph(f"Fecha: {venta.fecha.strftime('%d/%m/%Y %H:%M')}", style_normal))
         else:
-            fecha_venta = datetime.now()  # Usar fecha actual si no hay fecha
-            
-        story.append(Paragraph(f"<b>TICKET #{venta.id}</b>", style_info))
-        story.append(Paragraph(f"Fecha: {fecha_venta.strftime('%d/%m/%Y %H:%M')}", style_info))
-        story.append(Paragraph(f"Método: {venta.metodo_pago}", style_info))
+            story.append(Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_normal))
+        story.append(Paragraph(f"Método: {venta.metodo_pago}", style_normal))
         
         if venta.vendedor:
-            story.append(Paragraph(f"Vendedor: {venta.vendedor}", style_info))
+            story.append(Paragraph(f"Vendedor: {venta.vendedor}", style_normal))
         
-        story.append(Paragraph("-" * 40, style_info))
+        story.append(Spacer(1, 3*mm))
+        story.append(Paragraph("-" * 30, style_normal))
         
-        # Detalle de productos
-        detalles = DetalleVenta.get_by_venta(venta.id or 0)
+        # Detalles de la venta
+        if venta.id:
+            detalles = DetalleVenta.get_by_venta(venta.id)
+        else:
+            detalles = []
+        
+        # Crear tabla de productos
+        data = [['Producto', 'Cant', 'Precio', 'Total']]
         
         for detalle in detalles:
-            # Obtener información del producto
             producto = Producto.get_by_id(detalle.producto_id)
-            nombre_producto = producto.nombre if producto else "Producto no encontrado"
-            
-            # Línea del producto
-            story.append(Paragraph(f"<b>{nombre_producto}</b>", style_detalle))
-            
-            # Cantidad, precio unitario y subtotal
-            linea_detalle = f"{detalle.cantidad} x {detalle.precio_unitario:.2f} = {detalle.subtotal:.2f}"
-            story.append(Paragraph(linea_detalle, style_detalle))
-            
-            story.append(Spacer(1, 1*mm))
+            if producto:
+                data.append([
+                    producto.nombre[:15] + "..." if len(producto.nombre) > 15 else producto.nombre,
+                    str(detalle.cantidad),
+                    f"${detalle.precio_unitario:.2f}",
+                    f"${detalle.subtotal:.2f}"
+                ])
         
-        # Línea separadora
-        story.append(Paragraph("-" * 40, style_info))
+        # Crear tabla con estilo compacto
+        table = Table(data, colWidths=[25*mm, 10*mm, 15*mm, 15*mm])
+        table.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        
+        story.append(table)
+        story.append(Spacer(1, 3*mm))
+        story.append(Paragraph("-" * 30, style_normal))
         
         # Totales
-        moneda = self.get_configuracion('moneda', 'MXN')
+        subtotal = venta.total + venta.descuento
         
         if venta.descuento > 0:
-            subtotal = venta.total + venta.descuento
-            story.append(Paragraph(f"Subtotal: {subtotal:.2f} {moneda}", style_total))
-            story.append(Paragraph(f"Descuento: -{venta.descuento:.2f} {moneda}", style_total))
+            story.append(Paragraph(f"Subtotal: ${subtotal:.2f}", style_normal))
+            story.append(Paragraph(f"Descuento: -${venta.descuento:.2f}", style_normal))
         
-        if venta.impuestos > 0:
-            story.append(Paragraph(f"Impuestos: {venta.impuestos:.2f} {moneda}", style_total))
+        story.append(Paragraph(f"<b>TOTAL: ${venta.total:.2f}</b>", style_total))
         
-        story.append(Paragraph(f"<b>TOTAL: {venta.total:.2f} {moneda}</b>", style_total))
-        
-        # Mensaje final
-        mensaje = self.get_configuracion('mensaje_ticket', 'Gracias por su compra')
-        if mensaje:
-            story.append(Spacer(1, 3*mm))
-            story.append(Paragraph("=" * 40, style_info))
-            story.append(Paragraph(mensaje, style_info))
-        
-        # Información adicional
         if venta.observaciones:
-            story.append(Spacer(1, 2*mm))
-            story.append(Paragraph(f"Obs: {venta.observaciones}", style_info))
+            story.append(Spacer(1, 3*mm))
+            story.append(Paragraph(f"Nota: {venta.observaciones}", style_normal))
         
-        # Generar PDF
+        # Pie de página
+        mensaje_ticket = self.get_configuracion('mensaje_ticket', 'Gracias por su compra')
+        story.append(Spacer(1, 5*mm))
+        story.append(Paragraph("=" * 30, style_normal))
+        story.append(Paragraph(mensaje_ticket, style_subtitulo))
+        story.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_subtitulo))
+        
+        # Construir PDF
         doc.build(story)
+        
+        # Obtener bytes del buffer
+        buffer.seek(0)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        
+        return pdf_bytes
+    
+    def generar_ticket(self, venta: Venta, ruta_salida: str = "") -> str:
+        """Genera un ticket PDF para la venta (método legacy)"""
+        if not ruta_salida:
+            os.makedirs("tickets", exist_ok=True)
+            ruta_salida = f"tickets/ticket_{venta.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        # Generar en memoria y guardar a archivo
+        pdf_bytes = self.generar_ticket_memoria(venta)
+        
+        with open(ruta_salida, 'wb') as f:
+            f.write(pdf_bytes)
+        
         return ruta_salida
+
 
 def generar_reporte_ventas(fecha_inicio: str, fecha_fin: str, ruta_salida: str = "") -> str:
     """Genera un reporte de ventas en PDF"""
