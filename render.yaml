@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: mi-chaska
+    runtime: python3
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+    plan: free
+    env: python
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://admin:wkxMvaYK9HZaSWCsMn2aZJA3EMC9wLNu@dpg-d13oam8dl3ps7392hfu0-a/chaskabd
+      - key: DB_HOST  
+        value: dpg-d13oam8dl3ps7392hfu0
+      - key: DB_NAME
+        value: chaskabd
+      - key: DB_PASS
+        value: wkxMvaYK9HZaSWCsMn2aZJA3EMC9wLNu
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        value: admin
+      - key: SECRET_KEY
+        value: bd5d56cac14e32603c3e26296d88f26d
