@@ -1,11 +1,13 @@
 """
 Utilidades para manejo de zona horaria México (UTC-6)
+OPTIMIZADO - con cache para reducir llamadas externas
 """
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import pytz
 from typing import Optional
 import requests
 import logging
+import time
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -13,34 +15,57 @@ logger = logging.getLogger(__name__)
 # Zona horaria de México
 MEXICO_TZ = pytz.timezone('America/Mexico_City')
 
+# Cache para tiempo sincronizado
+_time_cache = {
+    'last_sync': 0,
+    'time_offset': None,
+    'cache_duration': 300  # 5 minutos
+}
+
 def get_mexico_datetime() -> datetime:
     """
     Obtiene la fecha y hora actual en zona horaria de México (UTC-6)
-    Primero intenta sincronizar con un servidor de tiempo mexicano
+    Usa cache para reducir llamadas externas
     """
-    try:
-        # Intentar obtener tiempo del servidor CENAM (Centro Nacional de Metrología de México)
-        response = requests.get(
-            'http://worldtimeapi.org/api/timezone/America/Mexico_City',
-            timeout=3
-        )
+    current_time = time.time()
+    
+    # Si no hay cache o ha expirado, intentar sincronizar
+    if (_time_cache['time_offset'] is None or 
+        current_time - _time_cache['last_sync'] > _time_cache['cache_duration']):
         
-        if response.status_code == 200:
-            data = response.json()
-            # El formato viene como: 2024-06-13T20:00:00.123456-06:00
-            datetime_str = data['datetime']
-            # Parsear el datetime con timezone
-            dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
-            logger.info(f"Tiempo sincronizado con servidor mexicano: {dt}")
-            return dt
+        try:
+            # Solo intentar sincronización cada 5 minutos
+            response = requests.get(
+                'http://worldtimeapi.org/api/timezone/America/Mexico_City',
+                timeout=2  # Timeout más corto
+            )
             
-    except Exception as e:
-        logger.warning(f"No se pudo sincronizar con servidor de tiempo: {e}")
-        
-    # Fallback: usar tiempo local convertido a México
+            if response.status_code == 200:
+                data = response.json()
+                datetime_str = data['datetime']
+                dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+                
+                # Calcular offset con tiempo local
+                local_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
+                _time_cache['time_offset'] = dt - local_utc
+                _time_cache['last_sync'] = current_time
+                
+                logger.info(f"Tiempo sincronizado con servidor mexicano: {dt}")
+                return dt
+                
+        except Exception as e:
+            # No loggear cada error para reducir spam
+            if current_time - _time_cache['last_sync'] > 60:  # Solo cada minuto
+                logger.warning(f"No se pudo sincronizar con servidor de tiempo: {e}")
+    
+    # Usar cache si está disponible
+    if _time_cache['time_offset'] is not None:
+        utc_now = datetime.utcnow().replace(tzinfo=pytz.UTC)
+        return utc_now + _time_cache['time_offset']
+    
+    # Fallback: usar tiempo local convertido a México (sin log frecuente)
     utc_now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     mexico_time = utc_now.astimezone(MEXICO_TZ)
-    logger.info(f"Usando tiempo local convertido a México: {mexico_time}")
     return mexico_time
 
 def format_mexico_datetime(dt: Optional[datetime] = None) -> str:

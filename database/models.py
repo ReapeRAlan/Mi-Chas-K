@@ -1,5 +1,6 @@
 """
 Modelos de datos para el sistema de facturación - PostgreSQL
+OPTIMIZADO - imports al inicio para evitar importaciones repetidas
 """
 from dataclasses import dataclass
 from typing import List, Optional
@@ -7,6 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 import logging
 from database.connection import execute_query, execute_update
+from utils.timezone_utils import get_mexico_datetime  # Import al inicio
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -154,20 +156,28 @@ class Venta:
         return ventas
     
     def save(self) -> int:
-        """Guarda la venta"""
-        if self.fecha is None:
-            from utils.timezone_utils import get_mexico_datetime
-            self.fecha = get_mexico_datetime()
+        """Guarda la venta - optimizado para evitar múltiples llamadas de timezone"""
+        try:
+            if self.fecha is None:
+                self.fecha = get_mexico_datetime()
+                
+            query = """
+                INSERT INTO ventas (total, metodo_pago, descuento, impuestos, fecha, vendedor, observaciones)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """
+            params = (self.total, self.metodo_pago, self.descuento, 
+                     self.impuestos, self.fecha, self.vendedor, self.observaciones)
             
-        query = """
-            INSERT INTO ventas (total, metodo_pago, descuento, impuestos, fecha, vendedor, observaciones)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """
-        params = (self.total, self.metodo_pago, self.descuento, 
-                 self.impuestos, self.fecha, self.vendedor, self.observaciones)
-        self.id = execute_update(query, params)
-        return self.id or 0
+            result_id = execute_update(query, params)
+            self.id = result_id
+            
+            logger.info(f"✅ Venta #{result_id} guardada exitosamente - Total: ${self.total}")
+            return result_id or 0
+            
+        except Exception as e:
+            logger.error(f"❌ Error al guardar venta: {e}")
+            raise
 
 @dataclass
 class DetalleVenta:

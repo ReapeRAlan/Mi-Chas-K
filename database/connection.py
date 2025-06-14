@@ -17,6 +17,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Contador para reducir logging excesivo
+_log_counter = {'connections': 0, 'last_log_time': 0}
+
 # Estado del módulo - usar diccionario para evitar problemas de import
 _module_state = {
     'initialized': False
@@ -44,16 +47,29 @@ def set_database_initialized(status: bool = True):
 
 @contextmanager
 def get_db_connection() -> Generator[psycopg2.extensions.connection, None, None]:
-    """Context manager para conexiones a la base de datos PostgreSQL"""
+    """Context manager para conexiones a la base de datos PostgreSQL - optimizado"""
     conn = None
     try:
+        # Logging reducido para evitar spam
+        import time
+        current_time = time.time()
+        _log_counter['connections'] += 1
+        
+        # Solo loggear cada 10 conexiones o cada 30 segundos
+        if (_log_counter['connections'] % 10 == 0 or 
+            current_time - _log_counter['last_log_time'] > 30):
+            
+            if DATABASE_URL:
+                logger.info(f"Conectando con DATABASE_URL... (#{_log_counter['connections']})")
+            else:
+                logger.info(f"Conectando con configuración individual: {DB_CONFIG['host']} (#{_log_counter['connections']})")
+            _log_counter['last_log_time'] = current_time
+        
         if DATABASE_URL:
             # Usar URL completa si está disponible (Render)
-            logger.info(f"Conectando con DATABASE_URL...")
             conn = psycopg2.connect(DATABASE_URL)
         else:
             # Usar configuración individual (desarrollo local)
-            logger.info(f"Conectando con configuración individual: {DB_CONFIG['host']}")
             conn = psycopg2.connect(**DB_CONFIG)
         
         conn.autocommit = False
