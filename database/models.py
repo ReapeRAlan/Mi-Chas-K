@@ -160,6 +160,9 @@ class Venta:
         try:
             if self.fecha is None:
                 self.fecha = get_mexico_datetime()
+                logger.info(f"⚠️ Fecha era None, asignada: {self.fecha}")
+            else:
+                logger.info(f"✅ Fecha ya establecida: {self.fecha}")
                 
             query = """
                 INSERT INTO ventas (total, metodo_pago, descuento, impuestos, fecha, vendedor, observaciones)
@@ -169,10 +172,12 @@ class Venta:
             params = (self.total, self.metodo_pago, self.descuento, 
                      self.impuestos, self.fecha, self.vendedor, self.observaciones)
             
+            logger.info(f"💾 Guardando venta con parámetros: Total=${self.total}, Fecha={self.fecha}")
+            
             result_id = execute_update(query, params)
             self.id = result_id
             
-            logger.info(f"✅ Venta #{result_id} guardada exitosamente - Total: ${self.total}")
+            logger.info(f"✅ Venta #{result_id} guardada exitosamente - Total: ${self.total} - Fecha: {self.fecha}")
             return result_id or 0
             
         except Exception as e:
@@ -403,13 +408,20 @@ class Carrito:
         if not self.items:
             return None
         
-        # Crear la venta
+        # Obtener fecha de México ANTES de crear la venta
+        fecha_mexico = get_mexico_datetime()
+        logger.info(f"🕐 Fecha México para venta: {fecha_mexico}")
+        
+        # Crear la venta CON fecha explícita
         venta = Venta(
             total=self.total,
             metodo_pago=metodo_pago,
             vendedor=vendedor,
-            observaciones=observaciones
+            observaciones=observaciones,
+            fecha=fecha_mexico  # ✅ Fecha explícita
         )
+        
+        logger.info(f"🛒 Venta creada con fecha: {venta.fecha}")
         venta_id = venta.save()
         venta.id = venta_id
         
