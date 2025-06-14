@@ -1,5 +1,6 @@
 """
-Conexión y manejo de base de datos - PostgreSQL para producción, SQLite para desarrollo
+Conexión y manejo de base de datos PostgreSQL para producción en Render
+Versión: 2.1.0 - Corregida inicialización global
 """
 import os
 import psycopg2
@@ -16,100 +17,128 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Determinar si usar SQLite para desarrollo local
-USE_SQLITE = os.getenv('USE_SQLITE', 'false').lower() == 'true' or os.getenv('DATABASE_URL') is None
+# Estado del módulo - usar diccionario para evitar problemas de import
+_module_state = {
+    'initialized': False
+}
 
-if USE_SQLITE:
-    logger.info("🔧 Usando SQLite para desarrollo local")
-    from database.sqlite_local import (
-        execute_query_sqlite as execute_query,
-        execute_update_sqlite as execute_update,
-        init_sqlite_database as init_database
-    )
-else:
-    logger.info("🐘 Usando PostgreSQL para producción")
-    
-    # Configuración de base de datos desde variables de entorno
-    DB_CONFIG = {
-        'host': os.getenv('DB_HOST', 'localhost'),
-        'database': os.getenv('DB_NAME', 'chaskabd'),
-        'user': os.getenv('DB_USER', 'admin'),
-        'password': os.getenv('DB_PASSWORD') or os.getenv('DB_PASS', ''),
-        'port': int(os.getenv('DB_PORT', '5432'))
-    }
+# Configuración de base de datos desde variables de entorno
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'database': os.getenv('DB_NAME', 'chaskabd'),
+    'user': os.getenv('DB_USER', 'admin'),
+    'password': os.getenv('DB_PASSWORD') or os.getenv('DB_PASS', ''),
+    'port': int(os.getenv('DB_PORT', '5432'))
+}
 
-    # También soportar DATABASE_URL completa
-    DATABASE_URL = os.getenv('DATABASE_URL')
+# También soportar DATABASE_URL completa
+DATABASE_URL = os.getenv('DATABASE_URL')
 
-    @contextmanager
-    def get_db_connection() -> Generator[psycopg2.extensions.connection, None, None]:
-        """Context manager para conexiones a la base de datos PostgreSQL"""
-        conn = None
-        try:
-            if DATABASE_URL:
-                # Usar URL completa si está disponible (Render)
-                logger.info(f"Conectando con DATABASE_URL...")
-                conn = psycopg2.connect(DATABASE_URL)
-            else:
-                # Usar configuración individual (desarrollo local)
-                logger.info(f"Conectando con configuración individual: {DB_CONFIG['host']}")
-                conn = psycopg2.connect(**DB_CONFIG)
-            
-            conn.autocommit = False
-            yield conn
-            
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            logger.error(f"Error de conexión a la base de datos: {e}")
-            raise
-        finally:
-            if conn:
-                conn.close()
+def is_database_initialized() -> bool:
+    """Retorna el estado de inicialización de la base de datos"""
+    return _module_state.get('initialized', False)
 
-    def execute_query(query: str, params: tuple = ()) -> List[Dict[str, Any]]:
-        """Ejecutar una consulta SQL de lectura"""
-        try:
-            with get_db_connection() as conn:
-                with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                    cursor.execute(query, params)
-                    result = cursor.fetchall()
-                    return [dict(row) for row in result]
+def set_database_initialized(status: bool = True):
+    """Establece el estado de inicialización de la base de datos"""
+    _module_state['initialized'] = status
+
+@contextmanager
+def get_db_connection() -> Generator[psycopg2.extensions.connection, None, None]:
+    """Context manager para conexiones a la base de datos PostgreSQL"""
+    conn = None
+    try:
+        if DATABASE_URL:
+            # Usar URL completa si está disponible (Render)
+            logger.info(f"Conectando con DATABASE_URL...")
+            conn = psycopg2.connect(DATABASE_URL)
+        else:
+            # Usar configuración individual (desarrollo local)
+            logger.info(f"Conectando con configuración individual: {DB_CONFIG['host']}")
+            conn = psycopg2.connect(**DB_CONFIG)
+        
+        conn.autocommit = False
+        yield conn
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Error de conexión a la base de datos: {e}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def execute_query(query: str, params: tuple = ()) -> List[Dict[str, Any]]:
+    """Ejecutar una consulta SQL de lectura"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(query, params)
+                result = cursor.fetchall()
+                return [dict(row) for row in result]
+                
+    except Exception as e:
+        logger.error(f"Error ejecutando consulta: {e}")
+        raise
+
+def execute_update(query: str, params: tuple = ()) -> Optional[int]:
+    """Ejecutar una consulta SQL de escritura"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, params)
+                
+                # Si es un INSERT con RETURNING, obtener el ID
+                if 'RETURNING' in query.upper():
+                    result = cursor.fetchone()
+                    conn.commit()
+                    return result[0] if result else None
+                else:
+                    conn.commit()
+                    return cursor.rowcount
                     
-        except Exception as e:
-            logger.error(f"Error ejecutando consulta: {e}")
-            raise
+    except Exception as e:
+        logger.error(f"Error ejecutando actualización: {e}")
+        raise
 
-    def execute_update(query: str, params: tuple = ()) -> Optional[int]:
-        """Ejecutar una consulta SQL de escritura"""
-        try:
-            with get_db_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute(query, params)
-                    
-                    # Si es un INSERT con RETURNING, obtener el ID
-                    if 'RETURNING' in query.upper():
-                        result = cursor.fetchone()
-                        conn.commit()
-                        return result[0] if result else None
-                    else:
-                        conn.commit()
-                        return cursor.rowcount
-                        
-        except Exception as e:
-            logger.error(f"Error ejecutando actualización: {e}")
-            raise
+def test_connection() -> bool:
+    """Prueba la conexión a la base de datos"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                return True
+    except Exception as e:
+        logger.error(f"Error de conexión: {e}")
+        return False
+
+def is_production_environment() -> bool:
+    """Detecta si estamos en entorno de producción"""
+    return os.getenv('DATABASE_URL') is not None or os.getenv('RENDER') is not None
 
 def init_database():
     """Inicializar la base de datos con las tablas necesarias para PostgreSQL"""
-    global _database_initialized
+    logger.info("🔧 Iniciando función init_database...")
+    logger.info(f"🔍 Estado del módulo: {_module_state}")
     
-    # Evitar múltiples inicializaciones
-    if _database_initialized:
-        logger.info("Base de datos ya inicializada, omitiendo...")
-        return
-        
     try:
+        # Evitar múltiples inicializaciones
+        if is_database_initialized():
+            logger.info("Base de datos ya inicializada, omitiendo...")
+            return
+        
+        # Verificar si estamos en producción
+        if not is_production_environment():
+            logger.warning("⚠️ Entorno de desarrollo detectado sin DATABASE_URL")
+            logger.warning("⚠️ Para desarrollo local, necesitas PostgreSQL instalado o usa SQLite")
+            set_database_initialized(False)
+            return
+        
+        # Probar conexión primero
+        if not test_connection():
+            logger.error("No se puede establecer conexión con la base de datos")
+            raise Exception("Conexión a base de datos fallida")
+        
         logger.info("Iniciando inicialización de base de datos...")
         
         with get_db_connection() as conn:
@@ -355,10 +384,12 @@ def init_database():
                 
                 conn.commit()
                 logger.info("Base de datos PostgreSQL inicializada correctamente")
-                _database_initialized = True
+                set_database_initialized(True)
                 
     except Exception as e:
         logger.error(f"Error inicializando la base de datos: {e}")
+        # Asegurar que la variable global se reinicie en caso de error
+        set_database_initialized(False)
         raise
 
 def verificar_y_reparar_categorias():

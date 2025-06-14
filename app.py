@@ -72,10 +72,14 @@ def init_app():
             st.info("🔧 Verifica que las variables de entorno estén configuradas correctamente")
             
             # En desarrollo, continuar sin base de datos
-            if os.getenv('DATABASE_URL') is None:
+            if os.getenv('DATABASE_URL') is None and os.getenv('RENDER') is None:
                 logger.warning("⚠️ Ejecutando en modo desarrollo sin base de datos")
                 st.warning("⚠️ Ejecutando en modo desarrollo sin base de datos")
+                st.info("💡 Para desarrollo local instala PostgreSQL o configura SQLite")
+                # Marcar como no inicializada pero no detener
+                st.session_state.db_initialized = False
             else:
+                # En producción, sí detener la aplicación
                 st.stop()
 
 def main():
