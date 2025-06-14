@@ -230,8 +230,9 @@ def mostrar_corte_caja():
         mostrar_historial_cortes()
 
 def mostrar_comparacion_detallada(fecha: str):
-    """Comparación detallada entre total de caja y total de ventas registradas"""
-    st.write("### 🔍 Análisis Caja vs Ventas Registradas")
+    """Comparación detallada entre CAJA FÍSICA vs SISTEMA/APP por separado"""
+    st.write("### 🔍 Análisis Detallado: Caja Física vs Sistema de Ventas")
+    st.info("💡 **Comparación separada**: Lado izquierdo muestra datos del sistema, lado derecho muestra dinero físico real")
     
     # Obtener datos del día
     ventas = Venta.get_by_fecha(fecha, fecha)
@@ -242,139 +243,288 @@ def mostrar_comparacion_detallada(fecha: str):
         st.info("📊 No hay datos registrados para esta fecha")
         return
     
-    # Cálculos de ventas registradas
-    total_ventas_registradas = sum(v.total for v in ventas)
-    ventas_efectivo_reg = sum(v.total for v in ventas if v.metodo_pago.lower() == 'efectivo')
-    ventas_tarjeta_reg = sum(v.total for v in ventas if v.metodo_pago.lower() == 'tarjeta')
-    ventas_transferencia_reg = sum(v.total for v in ventas if v.metodo_pago.lower() == 'transferencia')
-    total_gastos_reg = sum(g.monto for g in gastos)
+    # =================================================================
+    # CÁLCULOS DEL SISTEMA/APP (LADO A)
+    # =================================================================
+    total_ventas_sistema = sum(v.total for v in ventas)
+    ventas_efectivo_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'efectivo')
+    ventas_tarjeta_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'tarjeta')
+    ventas_transferencia_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'transferencia')
+    total_gastos_sistema = sum(g.monto for g in gastos)
+    ganancia_sistema = total_ventas_sistema - total_gastos_sistema
     
-    # Datos del corte de caja (si existe)
-    dinero_inicial_caja = corte.dinero_inicial if corte else 0
-    ventas_efectivo_caja = corte.ventas_efectivo if corte else 0
-    ventas_tarjeta_caja = corte.ventas_tarjeta if corte else 0
-    ventas_transferencia_caja = getattr(corte, 'ventas_transferencia', 0) if corte else 0
-    total_gastos_caja = corte.total_gastos if corte else 0
-    dinero_final_caja = corte.dinero_final if corte else 0
+    # =================================================================
+    # CÁLCULOS DE CAJA FÍSICA (LADO B)
+    # =================================================================
+    if corte:
+        dinero_inicial_caja = corte.dinero_inicial
+        ingresos_efectivo_caja = corte.ventas_efectivo  # Lo que realmente ingresó en efectivo
+        ingresos_tarjeta_caja = corte.ventas_tarjeta    # Lo que realmente se cobró en tarjeta
+        ingresos_transferencia_caja = getattr(corte, 'ventas_transferencia', 0)
+        gastos_caja = corte.total_gastos                # Lo que realmente se gastó
+        dinero_final_caja = corte.dinero_final          # Lo que quedó físicamente
+        
+        # Cálculo de la caja: Inicial + Ingresos - Gastos = Final esperado
+        total_ingresos_caja = ingresos_efectivo_caja + ingresos_tarjeta_caja + ingresos_transferencia_caja
+        dinero_final_calculado = dinero_inicial_caja + ingresos_efectivo_caja - gastos_caja
+        diferencia_caja_interna = dinero_final_caja - dinero_final_calculado
+        ganancia_caja = total_ingresos_caja - gastos_caja
+    else:
+        dinero_inicial_caja = 0
+        ingresos_efectivo_caja = 0
+        ingresos_tarjeta_caja = 0
+        ingresos_transferencia_caja = 0
+        gastos_caja = 0
+        dinero_final_caja = 0
+        total_ingresos_caja = 0
+        dinero_final_calculado = 0
+        diferencia_caja_interna = 0
+        ganancia_caja = 0
     
-    # Layout en dos columnas principales
+    # =================================================================
+    # LAYOUT EN DOS COLUMNAS SEPARADAS
+    # =================================================================
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 📋 **VENTAS REGISTRADAS**")
-        st.markdown("*Datos del sistema de ventas*")
+        st.markdown("#### 🖥️ **SISTEMA/APP**")
+        st.markdown("*📊 Datos registrados en la aplicación*")
+        st.markdown("---")
         
-        # Métricas de ventas registradas
-        st.metric("Total Ventas", f"${total_ventas_registradas:,.2f}", help="Suma de todas las ventas en el sistema")
+        # Ventas del sistema
+        st.metric("💰 Total Ventas Registradas", f"${total_ventas_sistema:,.2f}")
         
         col1_1, col1_2 = st.columns(2)
         with col1_1:
-            st.metric("Efectivo", f"${ventas_efectivo_reg:,.2f}")
-            st.metric("Transferencia", f"${ventas_transferencia_reg:,.2f}")
+            st.metric("Efectivo", f"${ventas_efectivo_sistema:,.2f}")
+            st.metric("Transferencia", f"${ventas_transferencia_sistema:,.2f}")
         with col1_2:
-            st.metric("Tarjeta", f"${ventas_tarjeta_reg:,.2f}")
-            st.metric("Gastos", f"${total_gastos_reg:,.2f}")
+            st.metric("Tarjeta", f"${ventas_tarjeta_sistema:,.2f}")
+            st.metric("Gastos", f"${total_gastos_sistema:,.2f}")
         
-        # Ganancia teórica
-        ganancia_teorica = total_ventas_registradas - total_gastos_reg
-        st.metric("Ganancia Teórica", f"${ganancia_teorica:,.2f}", delta=ganancia_teorica)
+        # Ganancia del sistema
+        delta_ganancia_sistema = ganancia_sistema if ganancia_sistema != 0 else None
+        color_ganancia_sistema = "normal" if ganancia_sistema >= 0 else "inverse"
+        st.metric("🎯 Ganancia Teórica", f"${ganancia_sistema:,.2f}", 
+                 delta=delta_ganancia_sistema, help="Ventas - Gastos registrados")
         
-        # Dinero esperado en caja
-        dinero_esperado = dinero_inicial_caja + ventas_efectivo_reg - total_gastos_reg
-        st.metric("Dinero Esperado en Caja", f"${dinero_esperado:,.2f}", help="Inicial + Efectivo - Gastos")
+        # Resumen del sistema
+        st.markdown("**📊 Flujo del Sistema:**")
+        st.text(f"Ventas:  +${total_ventas_sistema:,.2f}")
+        st.text(f"Gastos:  -${total_gastos_sistema:,.2f}")
+        st.text(f"= Ganancia: ${ganancia_sistema:,.2f}")
     
     with col2:
-        st.markdown("#### 💰 **CORTE DE CAJA**")
-        st.markdown("*Datos del conteo físico*")
+        st.markdown("#### 💰 **CAJA FÍSICA**")
+        st.markdown("*💵 Dinero real contado y verificado*")
+        st.markdown("---")
         
         if corte:
-            # Total registrado en corte
-            total_corte = ventas_efectivo_caja + ventas_tarjeta_caja + ventas_transferencia_caja
-            st.metric("Total Corte", f"${total_corte:,.2f}", help="Suma del corte de caja")
+            # Ingresos de la caja
+            st.metric("💵 Total Ingresos Reales", f"${total_ingresos_caja:,.2f}")
             
             col2_1, col2_2 = st.columns(2)
             with col2_1:
-                st.metric("Efectivo", f"${ventas_efectivo_caja:,.2f}")
-                st.metric("Transferencia", f"${ventas_transferencia_caja:,.2f}")
+                st.metric("Efectivo", f"${ingresos_efectivo_caja:,.2f}")
+                st.metric("Transferencia", f"${ingresos_transferencia_caja:,.2f}")
             with col2_2:
-                st.metric("Tarjeta", f"${ventas_tarjeta_caja:,.2f}")
-                st.metric("Gastos", f"${total_gastos_caja:,.2f}")
+                st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}")
+                st.metric("Gastos", f"${gastos_caja:,.2f}")
             
-            # Ganancia real
-            ganancia_real = total_corte - total_gastos_caja
-            st.metric("Ganancia Real", f"${ganancia_real:,.2f}", delta=ganancia_real)
+            # Ganancia de la caja
+            delta_ganancia_caja = ganancia_caja if ganancia_caja != 0 else None
+            st.metric("🎯 Ganancia Real", f"${ganancia_caja:,.2f}", 
+                     delta=delta_ganancia_caja, help="Ingresos - Gastos reales")
             
-            # Dinero final en caja
-            st.metric("Dinero Final en Caja", f"${dinero_final_caja:,.2f}", help="Conteo físico de dinero")
+            # Estado de la caja física
+            st.markdown("**💰 Estado de Caja:**")
+            st.text(f"Inicial:   ${dinero_inicial_caja:,.2f}")
+            st.text(f"Efectivo: +${ingresos_efectivo_caja:,.2f}")
+            st.text(f"Gastos:   -${gastos_caja:,.2f}")
+            st.text(f"Final:     ${dinero_final_caja:,.2f}")
             
+            # Verificación interna de caja
+            if abs(diferencia_caja_interna) > 0.5:
+                st.warning(f"⚠️ Diferencia interna: ${diferencia_caja_interna:,.2f}")
+            else:
+                st.success("✅ Caja cuadrada internamente")
         else:
-            st.warning("⚠️ No se ha realizado corte de caja para esta fecha")
-            st.info("Realiza el corte en la pestaña 'Nuevo Corte' para ver la comparación completa")
+            st.warning("⚠️ No se ha realizado corte de caja")
+            st.info("Realiza el corte en 'Nuevo Corte' para ver los datos reales")
     
-    # Análisis de diferencias
+    # =================================================================
+    # COMPARACIÓN ENTRE AMBOS LADOS
+    # =================================================================
     if corte:
         st.markdown("---")
-        st.markdown("### 🔍 **ANÁLISIS DE DIFERENCIAS**")
+        st.markdown("### ⚖️ **COMPARACIÓN DETALLADA: SISTEMA vs CAJA**")
+        st.markdown("*🔍 Análisis de diferencias entre lo registrado y lo físico*")
         
         col3, col4, col5 = st.columns(3)
         
         with col3:
-            # Diferencias por método de pago
-            st.markdown("#### Métodos de Pago")
-            diff_efectivo = ventas_efectivo_caja - ventas_efectivo_reg
-            diff_tarjeta = ventas_tarjeta_caja - ventas_tarjeta_reg
-            diff_transferencia = ventas_transferencia_caja - ventas_transferencia_reg
+            st.markdown("#### 💰 Por Método de Pago")
             
-            st.metric("Dif. Efectivo", f"${diff_efectivo:,.2f}", delta=diff_efectivo if diff_efectivo != 0 else None)
-            st.metric("Dif. Tarjeta", f"${diff_tarjeta:,.2f}", delta=diff_tarjeta if diff_tarjeta != 0 else None)
-            st.metric("Dif. Transferencia", f"${diff_transferencia:,.2f}", delta=diff_transferencia if diff_transferencia != 0 else None)
+            # Diferencias por método
+            diff_efectivo = ingresos_efectivo_caja - ventas_efectivo_sistema
+            diff_tarjeta = ingresos_tarjeta_caja - ventas_tarjeta_sistema
+            diff_transferencia = ingresos_transferencia_caja - ventas_transferencia_sistema
+            
+            st.metric("Efectivo", f"${diff_efectivo:,.2f}", 
+                     delta=diff_efectivo if diff_efectivo != 0 else None,
+                     help="Caja - Sistema")
+            st.metric("Tarjeta", f"${diff_tarjeta:,.2f}", 
+                     delta=diff_tarjeta if diff_tarjeta != 0 else None,
+                     help="Caja - Sistema")
+            st.metric("Transferencia", f"${diff_transferencia:,.2f}", 
+                     delta=diff_transferencia if diff_transferencia != 0 else None,
+                     help="Caja - Sistema")
         
         with col4:
-            # Diferencias en totales
-            st.markdown("#### Totales")
-            total_corte = ventas_efectivo_caja + ventas_tarjeta_caja + ventas_transferencia_caja
-            diff_ventas_total = total_corte - total_ventas_registradas
-            diff_gastos = total_gastos_caja - total_gastos_reg
-            diff_ganancia = (total_corte - total_gastos_caja) - ganancia_teorica
+            st.markdown("#### 📊 Totales Generales")
             
-            st.metric("Dif. Ventas Total", f"${diff_ventas_total:,.2f}", delta=diff_ventas_total if diff_ventas_total != 0 else None)
-            st.metric("Dif. Gastos", f"${diff_gastos:,.2f}", delta=diff_gastos if diff_gastos != 0 else None)
-            st.metric("Dif. Ganancia", f"${diff_ganancia:,.2f}", delta=diff_ganancia if diff_ganancia != 0 else None)
+            # Diferencias en totales
+            diff_ingresos = total_ingresos_caja - total_ventas_sistema
+            diff_gastos = gastos_caja - total_gastos_sistema
+            diff_ganancia = ganancia_caja - ganancia_sistema
+            
+            st.metric("Total Ingresos", f"${diff_ingresos:,.2f}", 
+                     delta=diff_ingresos if diff_ingresos != 0 else None,
+                     help="Ingresos Caja - Ventas Sistema")
+            st.metric("Total Gastos", f"${diff_gastos:,.2f}", 
+                     delta=diff_gastos if diff_gastos != 0 else None,
+                     help="Gastos Caja - Gastos Sistema")
+            st.metric("Ganancia", f"${diff_ganancia:,.2f}", 
+                     delta=diff_ganancia if diff_ganancia != 0 else None,
+                     help="Ganancia Caja - Ganancia Sistema")
         
         with col5:
-            # Diferencia en caja física
-            st.markdown("#### Caja Física")
-            diff_caja = dinero_final_caja - dinero_esperado
+            st.markdown("#### 🎯 Análisis Final")
             
-            # Indicador visual
-            if abs(diff_caja) < 1:
-                st.success("✅ Caja cuadrada")
-            elif abs(diff_caja) < 10:
-                st.warning("⚠️ Diferencia menor")
+            # Análisis de exactitud
+            if abs(diff_ingresos) < 1 and abs(diff_gastos) < 1:
+                st.success("🎉 **PERFECTO**")
+                st.write("Sistema y caja coinciden")
+            elif abs(diff_ingresos) < 10 and abs(diff_gastos) < 10:
+                st.warning("⚠️ **DIFERENCIA MENOR**")
+                st.write("Revisar pequeñas diferencias")
             else:
-                st.error("❌ Diferencia significativa")
+                st.error("❌ **DIFERENCIA SIGNIFICATIVA**")
+                st.write("Requiere investigación")
             
-            st.metric("Diferencia en Caja", f"${diff_caja:,.2f}", delta=diff_caja if diff_caja != 0 else None)
+            # Porcentaje de exactitud general
+            if total_ventas_sistema > 0:
+                exactitud_ingresos = 100 - (abs(diff_ingresos) / total_ventas_sistema * 100)
+                st.metric("Exactitud Ingresos", f"{max(0, exactitud_ingresos):.1f}%")
             
-            # Porcentaje de exactitud
-            exactitud = 100 - (abs(diff_caja) / dinero_esperado * 100) if dinero_esperado > 0 else 0
-            st.metric("Exactitud", f"{max(0, exactitud):.1f}%")
+            if total_gastos_sistema > 0:
+                exactitud_gastos = 100 - (abs(diff_gastos) / total_gastos_sistema * 100)
+                st.metric("Exactitud Gastos", f"{max(0, exactitud_gastos):.1f}%")
         
-        # Casos específicos y recomendaciones
-        st.markdown("### 💡 **CASOS Y RECOMENDACIONES**")
+        # =================================================================
+        # TABLA RESUMEN COMPARATIVA
+        # =================================================================
+        st.markdown("#### 📋 Tabla Resumen Comparativa")
         
-        if abs(diff_caja) < 1:
-            st.success("✅ **PERFECTO**: La caja cuadra perfectamente. Excelente control.")
-        elif diff_caja > 0:
-            st.info(f"💰 **SOBRANTE**: Hay ${diff_caja:,.2f} de más en caja. Posibles causas:\n"
-                   "- Venta no registrada en el sistema\n"
-                   "- Error en el conteo\n"
-                   "- Dinero de días anteriores")
-        else:
-            st.warning(f"💸 **FALTANTE**: Faltan ${abs(diff_caja):,.2f} en caja. Posibles causas:\n"
-                      "- Gasto no registrado\n"
-                      "- Error en el conteo\n"
-                      "- Venta registrada pero dinero usado para otros fines")
+        datos_comparacion = {
+            "Concepto": [
+                "💰 Efectivo", 
+                "💳 Tarjeta", 
+                "📱 Transferencia", 
+                "💸 Gastos",
+                "📊 TOTAL INGRESOS", 
+                "🎯 GANANCIA"
+            ],
+            "Sistema/App": [
+                f"${ventas_efectivo_sistema:,.2f}",
+                f"${ventas_tarjeta_sistema:,.2f}",
+                f"${ventas_transferencia_sistema:,.2f}",
+                f"${total_gastos_sistema:,.2f}",
+                f"${total_ventas_sistema:,.2f}",
+                f"${ganancia_sistema:,.2f}"
+            ],
+            "Caja Física": [
+                f"${ingresos_efectivo_caja:,.2f}",
+                f"${ingresos_tarjeta_caja:,.2f}",
+                f"${ingresos_transferencia_caja:,.2f}",
+                f"${gastos_caja:,.2f}",
+                f"${total_ingresos_caja:,.2f}",
+                f"${ganancia_caja:,.2f}"
+            ],
+            "Diferencia": [
+                f"${diff_efectivo:,.2f}",
+                f"${diff_tarjeta:,.2f}",
+                f"${diff_transferencia:,.2f}",
+                f"${diff_gastos:,.2f}",
+                f"${diff_ingresos:,.2f}",
+                f"${diff_ganancia:,.2f}"
+            ]
+        }
+        
+        df_comparacion = pd.DataFrame(datos_comparacion)
+        st.dataframe(df_comparacion, use_container_width=True)
+        
+        # =================================================================
+        # CASOS Y RECOMENDACIONES ESPECÍFICAS
+        # =================================================================
+        st.markdown("### 💡 **ANÁLISIS Y RECOMENDACIONES**")
+        
+        # Análisis por casos específicos
+        if abs(diff_ingresos) < 1 and abs(diff_gastos) < 1:
+            st.success("""
+            ✅ **EXCELENTE CONTROL FINANCIERO**
+            - El sistema y la caja física coinciden perfectamente
+            - Los procesos de registro están funcionando correctamente
+            - No se requieren acciones adicionales
+            """)
+        
+        elif diff_ingresos > 10:
+            st.info(f"""
+            💰 **INGRESOS EXTRAS EN CAJA**: +${diff_ingresos:,.2f}
+            **Posibles causas:**
+            - Ventas no registradas en el sistema
+            - Ingresos de días anteriores
+            - Errores en el conteo de la caja
+            
+            **Acciones recomendadas:**
+            - Verificar si hay ventas sin registrar
+            - Revisar el conteo físico del dinero
+            - Registrar las ventas faltantes si es el caso
+            """)
+        
+        elif diff_ingresos < -10:
+            st.warning(f"""
+            💸 **FALTANTE EN INGRESOS**: ${abs(diff_ingresos):,.2f}
+            **Posibles causas:**
+            - Ventas registradas pero dinero no depositado en caja
+            - Uso del dinero para gastos no registrados
+            - Errores en el registro del sistema
+            
+            **Acciones recomendadas:**
+            - Verificar que todo el dinero esté en la caja
+            - Revisar si hay gastos no registrados
+            - Confirmar que las ventas fueron reales
+            """)
+        
+        if abs(diff_gastos) > 5:
+            st.warning(f"""
+            📊 **DIFERENCIA EN GASTOS**: ${diff_gastos:,.2f}
+            **Recomendación:**
+            - Revisar que todos los gastos estén registrados correctamente
+            - Verificar comprobantes y facturas
+            - Actualizar registros faltantes
+            """)
+        
+        # Resumen de estado
+        if abs(diferencia_caja_interna) > 1:
+            st.error(f"""
+            🚨 **PROBLEMA EN CAJA FÍSICA**
+            - La caja no cuadra internamente
+            - Diferencia: ${diferencia_caja_interna:,.2f}
+            - Revisar el conteo físico del dinero
+            """)
+
+# ...existing code...
 
 def generar_reporte_diario(fecha: str):
     """Genera y descarga el reporte diario completo"""

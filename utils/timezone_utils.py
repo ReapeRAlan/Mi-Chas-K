@@ -137,6 +137,27 @@ def convert_to_mexico_time(dt: datetime) -> datetime:
     
     return mexico_time.replace(tzinfo=None)
 
+def convert_to_mexico_tz(dt: datetime) -> datetime:
+    """
+    Convierte un datetime a zona horaria de México
+    Args:
+        dt: datetime a convertir (puede tener o no timezone)
+    Returns:
+        datetime en zona horaria de México
+    """
+    try:
+        # Si no tiene timezone, asumimos UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        
+        # Convertir a timezone de México
+        return dt.astimezone(MEXICO_TZ_SIMPLE)
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Error al convertir timezone: {e}")
+        # Fallback: asumir que ya está en México
+        return dt
+
 def get_current_shift_period() -> str:
     """
     Determina el turno actual basado en la hora de México
