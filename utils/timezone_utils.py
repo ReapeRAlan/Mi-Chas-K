@@ -25,7 +25,7 @@ _time_cache = {
 def get_mexico_datetime() -> datetime:
     """
     Obtiene la fecha y hora actual en zona horaria de México (UTC-6)
-    Usa cache para reducir llamadas externas
+    Devuelve datetime SIN timezone info para compatibilidad con PostgreSQL
     """
     current_time = time.time()
     
@@ -50,8 +50,10 @@ def get_mexico_datetime() -> datetime:
                 _time_cache['time_offset'] = dt - local_utc
                 _time_cache['last_sync'] = current_time
                 
-                logger.info(f"Tiempo sincronizado con servidor mexicano: {dt}")
-                return dt
+                # Devolver sin timezone info
+                mexico_naive = dt.replace(tzinfo=None)
+                logger.info(f"Tiempo sincronizado con servidor mexicano: {mexico_naive}")
+                return mexico_naive
                 
         except Exception as e:
             # No loggear cada error para reducir spam
@@ -61,12 +63,13 @@ def get_mexico_datetime() -> datetime:
     # Usar cache si está disponible
     if _time_cache['time_offset'] is not None:
         utc_now = datetime.utcnow().replace(tzinfo=pytz.UTC)
-        return utc_now + _time_cache['time_offset']
+        mexico_with_tz = utc_now + _time_cache['time_offset']
+        return mexico_with_tz.replace(tzinfo=None)  # Sin timezone info
     
-    # Fallback: usar tiempo local convertido a México (sin log frecuente)
+    # Fallback: usar tiempo local convertido a México
     utc_now = datetime.utcnow().replace(tzinfo=pytz.UTC)
     mexico_time = utc_now.astimezone(MEXICO_TZ)
-    return mexico_time
+    return mexico_time.replace(tzinfo=None)  # Sin timezone info
 
 def format_mexico_datetime(dt: Optional[datetime] = None) -> str:
     """

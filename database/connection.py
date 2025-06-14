@@ -25,6 +25,12 @@ _module_state = {
     'initialized': False
 }
 
+# Contador para logging de conexiones
+_log_counter = {
+    'connections': 0,
+    'last_log_time': 0
+}
+
 # Configuración de base de datos desde variables de entorno
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
