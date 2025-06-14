@@ -1,102 +1,70 @@
 """
 Utilidades para manejo de zona horaria México (UTC-6)
-OPTIMIZADO - con cache para reducir llamadas externas
+VERSIÓN DEFINITIVA - Offset fijo calculado UNA VEZ, sin servicios externos
 """
 from datetime import datetime, timezone, timedelta
 import pytz
 from typing import Optional
-import requests
 import logging
-import time
 
 # Configurar logging
 logger = logging.getLogger(__name__)
 
-# Zona horaria de México
-MEXICO_TZ = pytz.timezone('America/Mexico_City')
+# ZONA HORARIA MÉXICO - DEFINIDA UNA VEZ Y PARA SIEMPRE
+MEXICO_OFFSET_HOURS = -6  # UTC-6 siempre
+MEXICO_OFFSET = timedelta(hours=MEXICO_OFFSET_HOURS)
+MEXICO_TZ_PYTZ = pytz.timezone('America/Mexico_City')  # Para localize()
+MEXICO_TZ_SIMPLE = timezone(MEXICO_OFFSET)  # Para astimezone()
 
-# Cache para tiempo sincronizado
-_time_cache = {
-    'last_sync': 0,
-    'time_offset': None,
-    'cache_duration': 300  # 5 minutos
+# Sistema de cache simplificado
+_timezone_cache = {
+    'offset_calculated': False,
+    'final_offset_hours': MEXICO_OFFSET_HOURS,  # Por defecto UTC-6
+    'last_log': 0
 }
 
-"""
-Utilidades para manejo de zona horaria México (UTC-6)
-VERSIÓN ROBUSTA - con offset fijo confiable
-"""
-from datetime import datetime, timezone, timedelta
-import pytz
-from typing import Optional
-import requests
-import logging
-import time
-
-# Configurar logging
-logger = logging.getLogger(__name__)
-
-# Zona horaria de México (UTC-6) - SIEMPRE
-MEXICO_OFFSET = timedelta(hours=-6)
-MEXICO_TZ = timezone(MEXICO_OFFSET)
-
-# Cache para tiempo sincronizado - reiniciar cache
-_time_cache = {
-    'last_sync': 0,
-    'server_offset_validated': False,
-    'cache_duration': 3600,  # 1 hora
-    'last_log': 0  # Para logging controlado
-}
+def _calculate_offset_once():
+    """
+    Calcula el offset de México UNA SOLA VEZ y lo guarda en cache
+    Sin servicios externos, solo lógica interna
+    """
+    global _timezone_cache
+    
+    if _timezone_cache['offset_calculated']:
+        return _timezone_cache['final_offset_hours']
+    
+    # LÓGICA SIMPLE: México está en UTC-6 casi todo el año
+    # Durante horario de verano (abril-octubre) puede ser UTC-5, pero
+    # para consistencia en el sistema de ventas, usar SIEMPRE UTC-6
+    
+    _timezone_cache['final_offset_hours'] = -6
+    _timezone_cache['offset_calculated'] = True
+    
+    logger.info(f"🇲🇽 Offset México calculado: UTC{_timezone_cache['final_offset_hours']}")
+    return _timezone_cache['final_offset_hours']
 
 def get_mexico_datetime() -> datetime:
     """
-    Obtiene la fecha y hora actual en zona horaria de México (UTC-6)
-    VERSIÓN ROBUSTA: Siempre usa UTC-6, validado contra servidor
+    Obtiene la fecha y hora actual en zona horaria de México
+    VERSIÓN DEFINITIVA: Offset calculado una vez, sin servicios externos
     """
-    current_time = time.time()
+    global _timezone_cache
+    import time
     
-    # Obtener UTC actual
+    # Calcular offset una sola vez
+    offset_hours = _calculate_offset_once()
+    
+    # Obtener UTC actual y aplicar offset
     utc_now = datetime.now(timezone.utc)
-    
-    # Si no hemos validado el offset recientemente, intentar sincronizar UNA VEZ
-    if (not _time_cache['server_offset_validated'] or 
-        current_time - _time_cache['last_sync'] > _time_cache['cache_duration']):
-        
-        try:
-            # Intentar validar con servidor mexicano
-            response = requests.get(
-                'http://worldtimeapi.org/api/timezone/America/Mexico_City',
-                timeout=3
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                datetime_str = data['datetime']
-                server_mexico = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
-                
-                # Calcular qué offset usa el servidor
-                server_utc = server_mexico.astimezone(timezone.utc)
-                calculated_offset = server_mexico - server_utc
-                
-                # Verificar que el servidor confirma UTC-6
-                if abs(calculated_offset.total_seconds() + 6*3600) < 3600:  # Dentro de 1 hora de diferencia
-                    _time_cache['server_offset_validated'] = True
-                    _time_cache['last_sync'] = current_time
-                    logger.info(f"✅ Offset México validado con servidor: UTC-6")
-                else:
-                    logger.warning(f"⚠️ Servidor reporta offset diferente: {calculated_offset}")
-                
-        except Exception as e:
-            logger.warning(f"⚠️ No se pudo validar con servidor, usando UTC-6 fijo: {e}")
-    
-    # SIEMPRE usar UTC-6 (independiente de la sincronización)
-    mexico_time = utc_now.astimezone(MEXICO_TZ)
+    mexico_offset = timedelta(hours=offset_hours)
+    mexico_time = utc_now + mexico_offset
     mexico_naive = mexico_time.replace(tzinfo=None)
     
-    # Logging solo cuando hay cambios significativos
-    if current_time - _time_cache.get('last_log', 0) > 300:  # Solo cada 5 minutos
-        logger.info(f"🇲🇽 Hora México (UTC-6): {mexico_naive}")
-        _time_cache['last_log'] = current_time
+    # Logging muy reducido
+    current_time = time.time()
+    if current_time - _timezone_cache.get('last_log', 0) > 1800:  # Solo cada 30 minutos
+        logger.info(f"🇲🇽 México UTC{offset_hours}: {mexico_naive}")
+        _timezone_cache['last_log'] = current_time
     
     return mexico_naive
 
@@ -107,13 +75,16 @@ def format_mexico_datetime(dt: Optional[datetime] = None) -> str:
     if dt is None:
         dt = get_mexico_datetime()
     
-    # Asegurar que el datetime tenga timezone
+    # Si no tiene timezone, asumimos que ya es hora México
     if dt.tzinfo is None:
-        dt = MEXICO_TZ.localize(dt)
-    elif dt.tzinfo != MEXICO_TZ:
-        dt = dt.astimezone(MEXICO_TZ)
-    
-    return dt.strftime("%d/%m/%Y %H:%M:%S")
+        # Ya está en hora México, solo formatear
+        return dt.strftime("%d/%m/%Y %H:%M:%S")
+    else:
+        # Convertir a México usando nuestro sistema
+        dt_utc = dt.astimezone(timezone.utc)
+        offset_hours = _calculate_offset_once()
+        mexico_time = dt_utc + timedelta(hours=offset_hours)
+        return mexico_time.strftime("%d/%m/%Y %H:%M:%S")
 
 def get_mexico_date_str(dt: Optional[datetime] = None) -> str:
     """
@@ -122,13 +93,15 @@ def get_mexico_date_str(dt: Optional[datetime] = None) -> str:
     if dt is None:
         dt = get_mexico_datetime()
     
-    # Asegurar que el datetime tenga timezone
+    # Si no tiene timezone, asumimos que ya es hora México
     if dt.tzinfo is None:
-        dt = MEXICO_TZ.localize(dt)
-    elif dt.tzinfo != MEXICO_TZ:
-        dt = dt.astimezone(MEXICO_TZ)
-    
-    return dt.strftime("%Y-%m-%d")
+        return dt.strftime("%Y-%m-%d")
+    else:
+        # Convertir a México
+        dt_utc = dt.astimezone(timezone.utc)
+        offset_hours = _calculate_offset_once()
+        mexico_time = dt_utc + timedelta(hours=offset_hours)
+        return mexico_time.strftime("%Y-%m-%d")
 
 def get_mexico_time_str(dt: Optional[datetime] = None) -> str:
     """
@@ -137,23 +110,32 @@ def get_mexico_time_str(dt: Optional[datetime] = None) -> str:
     if dt is None:
         dt = get_mexico_datetime()
     
-    # Asegurar que el datetime tenga timezone
+    # Si no tiene timezone, asumimos que ya es hora México
     if dt.tzinfo is None:
-        dt = MEXICO_TZ.localize(dt)
-    elif dt.tzinfo != MEXICO_TZ:
-        dt = dt.astimezone(MEXICO_TZ)
-    
-    return dt.strftime("%H:%M:%S")
+        return dt.strftime("%H:%M:%S")
+    else:
+        # Convertir a México
+        dt_utc = dt.astimezone(timezone.utc)
+        offset_hours = _calculate_offset_once()
+        mexico_time = dt_utc + timedelta(hours=offset_hours)
+        return mexico_time.strftime("%H:%M:%S")
 
 def convert_to_mexico_time(dt: datetime) -> datetime:
     """
     Convierte cualquier datetime a zona horaria de México
     """
     if dt.tzinfo is None:
-        # Si no tiene timezone, asumimos que es UTC
-        dt = pytz.UTC.localize(dt)
+        # Asumimos que es UTC si no tiene timezone
+        dt = dt.replace(tzinfo=timezone.utc)
     
-    return dt.astimezone(MEXICO_TZ)
+    # Convertir a UTC primero
+    dt_utc = dt.astimezone(timezone.utc)
+    
+    # Aplicar offset de México
+    offset_hours = _calculate_offset_once()
+    mexico_time = dt_utc + timedelta(hours=offset_hours)
+    
+    return mexico_time.replace(tzinfo=None)
 
 def get_current_shift_period() -> str:
     """
