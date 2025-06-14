@@ -410,33 +410,67 @@ def mostrar_historial_cortes():
     cortes = execute_query(query)
     
     if cortes:
-        df_cortes = pd.DataFrame(cortes)
-        
-        # Calcular diferencias para cada corte
-        df_cortes['dinero_esperado'] = df_cortes['dinero_inicial'] + df_cortes['ventas_efectivo'] - df_cortes['total_gastos']
-        df_cortes['diferencia'] = df_cortes['dinero_final'] - df_cortes['dinero_esperado']
-        df_cortes['exactitud'] = 100 - (abs(df_cortes['diferencia']) / df_cortes['dinero_esperado'] * 100)
-        
-        # Formatear para mostrar
-        df_display = df_cortes[['fecha', 'vendedor', 'dinero_inicial', 'dinero_final', 'diferencia', 'exactitud']].copy()
-        df_display['exactitud'] = df_display['exactitud'].round(1)
-        
-        st.dataframe(df_display, use_container_width=True)
-        
-        # Estadísticas del historial
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            promedio_diferencia = df_cortes['diferencia'].mean()
-            st.metric("Diferencia Promedio", f"${promedio_diferencia:,.2f}")
-        
-        with col2:
-            exactitud_promedio = df_cortes['exactitud'].mean()
-            st.metric("Exactitud Promedio", f"{exactitud_promedio:.1f}%")
-        
-        with col3:
-            cortes_perfectos = len(df_cortes[abs(df_cortes['diferencia']) < 1])
-            st.metric("Cortes Perfectos", f"{cortes_perfectos}/{len(df_cortes)}")
+        try:
+            df_cortes = pd.DataFrame(cortes)
+            
+            # Asegurar que las columnas numéricas sean float
+            numeric_cols = ['dinero_inicial', 'dinero_final', 'ventas_efectivo', 'total_gastos']
+            for col in numeric_cols:
+                if col in df_cortes.columns:
+                    df_cortes[col] = pd.to_numeric(df_cortes[col], errors='coerce').fillna(0)
+            
+            # Calcular diferencias para cada corte con manejo seguro
+            df_cortes['dinero_esperado'] = df_cortes['dinero_inicial'] + df_cortes['ventas_efectivo'] - df_cortes['total_gastos']
+            df_cortes['diferencia'] = df_cortes['dinero_final'] - df_cortes['dinero_esperado']
+            
+            # Calcular exactitud con manejo de división por cero
+            df_cortes['exactitud'] = df_cortes.apply(
+                lambda row: 100 - (abs(row['diferencia']) / row['dinero_esperado'] * 100) 
+                if row['dinero_esperado'] > 0 else 0, 
+                axis=1
+            )
+            
+            # Formatear para mostrar
+            display_cols = ['fecha', 'vendedor', 'dinero_inicial', 'dinero_final', 'diferencia', 'exactitud']
+            df_display = df_cortes[display_cols].copy()
+            
+            # Redondear exactitud de forma segura
+            df_display['exactitud'] = df_display['exactitud'].apply(
+                lambda x: round(float(x), 1) if pd.notnull(x) and not pd.isinf(x) else 0.0
+            )
+            
+            # Formatear números para mejor visualización
+            df_display['dinero_inicial'] = df_display['dinero_inicial'].apply(lambda x: f"${x:,.2f}")
+            df_display['dinero_final'] = df_display['dinero_final'].apply(lambda x: f"${x:,.2f}")
+            df_display['diferencia'] = df_display['diferencia'].apply(lambda x: f"${x:,.2f}")
+            df_display['exactitud'] = df_display['exactitud'].apply(lambda x: f"{x:.1f}%")
+            
+            st.dataframe(df_display, use_container_width=True)
+            
+            # Estadísticas del historial con manejo seguro
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                promedio_diferencia = df_cortes['diferencia'].mean()
+                if pd.notnull(promedio_diferencia):
+                    st.metric("Diferencia Promedio", f"${promedio_diferencia:,.2f}")
+                else:
+                    st.metric("Diferencia Promedio", "$0.00")
+            
+            with col2:
+                exactitud_promedio = df_cortes['exactitud'].mean()
+                if pd.notnull(exactitud_promedio) and not pd.isinf(exactitud_promedio):
+                    st.metric("Exactitud Promedio", f"{exactitud_promedio:.1f}%")
+                else:
+                    st.metric("Exactitud Promedio", "0.0%")
+            
+            with col3:
+                cortes_perfectos = len(df_cortes[abs(df_cortes['diferencia']) < 1])
+                st.metric("Cortes Perfectos", f"{cortes_perfectos}/{len(df_cortes)}")
+                
+        except Exception as e:
+            st.error(f"❌ Error al mostrar historial: {str(e)}")
+            st.info("📊 No se pudieron cargar las estadísticas del historial")
     
     else:
         st.info("📊 No hay cortes de caja registrados")
