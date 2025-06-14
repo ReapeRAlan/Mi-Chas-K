@@ -51,10 +51,10 @@ def mostrar_analisis_ventas():
         fecha_inicio, fecha_fin = opciones_fecha[periodo_seleccionado]
     
     with col2:
-        fecha_inicio_custom = st.date_input("Desde:", value=fecha_inicio)
+        fecha_inicio_custom = st.date_input("Desde:", value=fecha_inicio, key="dashboard_fecha_inicio")
     
     with col3:
-        fecha_fin_custom = st.date_input("Hasta:", value=fecha_fin)
+        fecha_fin_custom = st.date_input("Hasta:", value=fecha_fin, key="dashboard_fecha_fin")
     
     # Usar fechas personalizadas si son diferentes
     if fecha_inicio_custom != fecha_inicio or fecha_fin_custom != fecha_fin:
@@ -328,10 +328,10 @@ def mostrar_resumen_financiero():
     col1, col2 = st.columns(2)
     
     with col1:
-        fecha_inicio = st.date_input("Desde:", value=datetime.now().date() - timedelta(days=30))
+        fecha_inicio = st.date_input("Desde:", value=datetime.now().date() - timedelta(days=30), key="resumen_fecha_inicio")
     
     with col2:
-        fecha_fin = st.date_input("Hasta:", value=datetime.now().date())
+        fecha_fin = st.date_input("Hasta:", value=datetime.now().date(), key="resumen_fecha_fin")
     
     # Obtener datos del período
     fecha_inicio_str = str(fecha_inicio)

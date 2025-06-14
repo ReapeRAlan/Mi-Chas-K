@@ -165,6 +165,38 @@ def mostrar_formulario_venta():
     
     carrito = st.session_state.carrito
     
+    # Manejo de vendedores FUERA del formulario
+    vendedores_existentes = Vendedor.get_nombres_activos()
+    
+    # Verificar si se necesita agregar un nuevo vendedor
+    if st.session_state.get('agregar_nuevo_vendedor', False):
+        st.write("**Agregar Nuevo Vendedor:**")
+        nuevo_vendedor = st.text_input(
+            "Nombre del nuevo vendedor:",
+            key="nuevo_vendedor_input_form"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ Confirmar Vendedor", key="confirm_vendedor_btn"):
+                if nuevo_vendedor and nuevo_vendedor.strip():
+                    try:
+                        vendedor_obj = Vendedor(nombre=nuevo_vendedor.strip())
+                        vendedor_obj.save()
+                        show_success_message(f"Vendedor '{nuevo_vendedor}' agregado exitosamente")
+                        st.session_state.agregar_nuevo_vendedor = False
+                        st.session_state.vendedor_seleccionado = nuevo_vendedor.strip()
+                        st.rerun()
+                    except Exception as e:
+                        show_error_message(f"Error al agregar vendedor: {str(e)}")
+                else:
+                    show_error_message("Por favor ingresa un nombre válido")
+        
+        with col2:
+            if st.button("❌ Cancelar", key="cancel_vendedor_btn"):
+                st.session_state.agregar_nuevo_vendedor = False
+                st.rerun()
+    
     with st.form("formulario_venta"):
         # Método de pago
         metodo_pago = st.selectbox(
@@ -173,31 +205,24 @@ def mostrar_formulario_venta():
         )
         
         # Vendedor - menú desplegable con opción de agregar
-        vendedores_existentes = Vendedor.get_nombres_activos()
         vendedores_opciones = vendedores_existentes + ["+ Agregar nuevo vendedor"]
+        
+        # Usar el vendedor seleccionado previamente si existe
+        vendedor_default = st.session_state.get('vendedor_seleccionado', vendedores_opciones[0])
+        if vendedor_default not in vendedores_opciones:
+            vendedores_opciones.insert(-1, vendedor_default)
         
         vendedor_seleccionado = st.selectbox(
             "Vendedor:",
             vendedores_opciones,
-            key="vendedor_select"
+            key="vendedor_select_form",
+            index=vendedores_opciones.index(vendedor_default) if vendedor_default in vendedores_opciones else 0
         )
         
+        # Si selecciona agregar nuevo vendedor, mostrar el formulario correspondiente
         if vendedor_seleccionado == "+ Agregar nuevo vendedor":
-            nuevo_vendedor = st.text_input(
-                "Nombre del nuevo vendedor:",
-                key="nuevo_vendedor_input"
-            )
-            
-            if nuevo_vendedor and st.button("➕ Agregar Vendedor", key="add_vendedor_btn"):
-                try:
-                    vendedor_obj = Vendedor(nombre=nuevo_vendedor.strip())
-                    vendedor_obj.save()
-                    st.success(f"Vendedor '{nuevo_vendedor}' agregado exitosamente")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al agregar vendedor: {str(e)}")
-            
-            vendedor_final = nuevo_vendedor if nuevo_vendedor else ""
+            st.info("👆 Para agregar un nuevo vendedor, confirma este formulario primero y luego usa la opción que aparecerá arriba.")
+            vendedor_final = ""
         else:
             vendedor_final = vendedor_seleccionado
         
@@ -224,49 +249,64 @@ def mostrar_formulario_venta():
         st.write(f"**Total Final:** {format_currency(total_final)}")
         
         # Botón procesar
-        if st.form_submit_button("✅ Confirmar Venta", type="primary"):
-            try:
-                # Validar que hay items en el carrito
-                if not carrito.items:
-                    show_error_message("El carrito está vacío")
-                    return
+        submit_venta = st.form_submit_button("✅ Confirmar Venta", type="primary")
+        submit_agregar_vendedor = st.form_submit_button("👤 Necesito agregar vendedor") if vendedor_seleccionado == "+ Agregar nuevo vendedor" else False
+    
+    # Manejar envío del formulario FUERA del form
+    if submit_agregar_vendedor:
+        st.session_state.agregar_nuevo_vendedor = True
+        st.rerun()
+    
+    if submit_venta:
+        try:
+            # Validar que hay items en el carrito
+            if not carrito.items:
+                show_error_message("El carrito está vacío")
+                return
+            
+            # Validar vendedor
+            if not vendedor_final:
+                show_error_message("Por favor selecciona un vendedor válido")
+                return
+            
+            # Procesar la venta
+            venta = carrito.procesar_venta(
+                metodo_pago=metodo_pago,
+                vendedor=vendedor_final,
+                observaciones=observaciones
+            )
+            
+            if venta:
+                # Aplicar descuento si existe
+                if descuento_monto > 0:
+                    from database.connection import execute_update
+                    execute_update(
+                        "UPDATE ventas SET total = %s, descuento = %s WHERE id = %s",
+                        (total_final, descuento_monto, venta.id)
+                    )
+                    venta.total = total_final
+                    venta.descuento = descuento_monto
                 
-                # Procesar la venta
-                venta = carrito.procesar_venta(
-                    metodo_pago=metodo_pago,
-                    vendedor=vendedor_final,
-                    observaciones=observaciones
-                )
+                # Guardar en session state
+                st.session_state.venta_procesada = venta
+                st.session_state.show_ticket = True
+                st.session_state.show_form_venta = False  # Ocultar formulario
+                st.session_state.agregar_nuevo_vendedor = False  # Reset flag
                 
-                if venta:
-                    # Aplicar descuento si existe
-                    if descuento_monto > 0:
-                        from database.connection import execute_update
-                        execute_update(
-                            "UPDATE ventas SET total = %s, descuento = %s WHERE id = %s",
-                            (total_final, descuento_monto, venta.id)
-                        )
-                        venta.total = total_final
-                        venta.descuento = descuento_monto
-                    
-                    # Guardar en session state
-                    st.session_state.venta_procesada = venta
-                    st.session_state.show_ticket = True
-                    st.session_state.show_form_venta = False  # Ocultar formulario
-                    
-                    show_success_message(f"¡Venta #{venta.id} procesada exitosamente!")
-                    st.balloons()
-                    st.rerun()
-                else:
-                    show_error_message("Error al procesar la venta")
-                    
-            except Exception as e:
-                show_error_message(f"Error al procesar la venta: {str(e)}")
+                show_success_message(f"¡Venta #{venta.id} procesada exitosamente!")
+                st.balloons()
+                st.rerun()
+            else:
+                show_error_message("Error al procesar la venta")
                 
-        # Botón para cancelar
-        if st.form_submit_button("❌ Cancelar"):
-            st.session_state.show_form_venta = False
-            st.rerun()
+        except Exception as e:
+            show_error_message(f"Error al procesar la venta: {str(e)}")
+    
+    # Botón para cancelar (fuera del form también)
+    if st.button("❌ Cancelar Venta", key="cancel_venta_btn"):
+        st.session_state.show_form_venta = False
+        st.session_state.agregar_nuevo_vendedor = False
+        st.rerun()
 
 def mostrar_opciones_post_venta(venta):
     """Muestra opciones después de procesar una venta"""

@@ -11,6 +11,13 @@ from utils.helpers import format_currency
 from utils.timezone_utils import get_mexico_datetime, get_mexico_date_str, format_mexico_datetime
 from utils.pdf_generator import TicketGenerator
 
+def safe_int(value):
+    """Convierte valor a int de forma segura, manejando numpy.int64"""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return value
+
 def mostrar_ordenes():
     """Página principal de gestión de órdenes"""
     st.title("📋 Gestión de Órdenes")
@@ -137,6 +144,8 @@ def mostrar_lista_ordenes():
 
 def mostrar_detalle_orden(orden_id: int):
     """Muestra el detalle completo de una orden"""
+    orden_id = safe_int(orden_id)  # Convertir a int seguro
+    
     with st.expander(f"📋 Detalle de Orden #{orden_id}", expanded=True):
         # Obtener información de la venta
         venta_query = "SELECT * FROM ventas WHERE id = %s"
@@ -198,7 +207,7 @@ def mostrar_detalle_orden(orden_id: int):
 
 def mostrar_modificar_orden():
     """Permite modificar una orden existente"""
-    orden_id = st.session_state.orden_seleccionada
+    orden_id = safe_int(st.session_state.orden_seleccionada)  # Convertir a int seguro
     
     st.subheader(f"✏️ Modificar Orden #{orden_id}")
     
@@ -395,6 +404,8 @@ def mostrar_modificar_orden():
 
 def reimprimir_ticket(orden_id: int):
     """Reimprime el ticket de una orden"""
+    orden_id = safe_int(orden_id)  # Convertir a int seguro
+    
     try:
         # Obtener datos de la venta
         venta_data = execute_query("SELECT * FROM ventas WHERE id = %s", (orden_id,))
