@@ -22,54 +22,83 @@ _time_cache = {
     'cache_duration': 300  # 5 minutos
 }
 
+"""
+Utilidades para manejo de zona horaria México (UTC-6)
+VERSIÓN ROBUSTA - con offset fijo confiable
+"""
+from datetime import datetime, timezone, timedelta
+import pytz
+from typing import Optional
+import requests
+import logging
+import time
+
+# Configurar logging
+logger = logging.getLogger(__name__)
+
+# Zona horaria de México (UTC-6) - SIEMPRE
+MEXICO_OFFSET = timedelta(hours=-6)
+MEXICO_TZ = timezone(MEXICO_OFFSET)
+
+# Cache para tiempo sincronizado - reiniciar cache
+_time_cache = {
+    'last_sync': 0,
+    'server_offset_validated': False,
+    'cache_duration': 3600,  # 1 hora
+    'last_log': 0  # Para logging controlado
+}
+
 def get_mexico_datetime() -> datetime:
     """
     Obtiene la fecha y hora actual en zona horaria de México (UTC-6)
-    Devuelve datetime SIN timezone info para compatibilidad con PostgreSQL
+    VERSIÓN ROBUSTA: Siempre usa UTC-6, validado contra servidor
     """
     current_time = time.time()
     
-    # Si no hay cache o ha expirado, intentar sincronizar
-    if (_time_cache['time_offset'] is None or 
+    # Obtener UTC actual
+    utc_now = datetime.now(timezone.utc)
+    
+    # Si no hemos validado el offset recientemente, intentar sincronizar UNA VEZ
+    if (not _time_cache['server_offset_validated'] or 
         current_time - _time_cache['last_sync'] > _time_cache['cache_duration']):
         
         try:
-            # Solo intentar sincronización cada 5 minutos
+            # Intentar validar con servidor mexicano
             response = requests.get(
                 'http://worldtimeapi.org/api/timezone/America/Mexico_City',
-                timeout=2  # Timeout más corto
+                timeout=3
             )
             
             if response.status_code == 200:
                 data = response.json()
                 datetime_str = data['datetime']
-                dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+                server_mexico = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
                 
-                # Calcular offset con tiempo local
-                local_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
-                _time_cache['time_offset'] = dt - local_utc
-                _time_cache['last_sync'] = current_time
+                # Calcular qué offset usa el servidor
+                server_utc = server_mexico.astimezone(timezone.utc)
+                calculated_offset = server_mexico - server_utc
                 
-                # Devolver sin timezone info
-                mexico_naive = dt.replace(tzinfo=None)
-                logger.info(f"Tiempo sincronizado con servidor mexicano: {mexico_naive}")
-                return mexico_naive
+                # Verificar que el servidor confirma UTC-6
+                if abs(calculated_offset.total_seconds() + 6*3600) < 3600:  # Dentro de 1 hora de diferencia
+                    _time_cache['server_offset_validated'] = True
+                    _time_cache['last_sync'] = current_time
+                    logger.info(f"✅ Offset México validado con servidor: UTC-6")
+                else:
+                    logger.warning(f"⚠️ Servidor reporta offset diferente: {calculated_offset}")
                 
         except Exception as e:
-            # No loggear cada error para reducir spam
-            if current_time - _time_cache['last_sync'] > 60:  # Solo cada minuto
-                logger.warning(f"No se pudo sincronizar con servidor de tiempo: {e}")
+            logger.warning(f"⚠️ No se pudo validar con servidor, usando UTC-6 fijo: {e}")
     
-    # Usar cache si está disponible
-    if _time_cache['time_offset'] is not None:
-        utc_now = datetime.utcnow().replace(tzinfo=pytz.UTC)
-        mexico_with_tz = utc_now + _time_cache['time_offset']
-        return mexico_with_tz.replace(tzinfo=None)  # Sin timezone info
-    
-    # Fallback: usar tiempo local convertido a México
-    utc_now = datetime.utcnow().replace(tzinfo=pytz.UTC)
+    # SIEMPRE usar UTC-6 (independiente de la sincronización)
     mexico_time = utc_now.astimezone(MEXICO_TZ)
-    return mexico_time.replace(tzinfo=None)  # Sin timezone info
+    mexico_naive = mexico_time.replace(tzinfo=None)
+    
+    # Logging solo cuando hay cambios significativos
+    if current_time - _time_cache.get('last_log', 0) > 300:  # Solo cada 5 minutos
+        logger.info(f"🇲🇽 Hora México (UTC-6): {mexico_naive}")
+        _time_cache['last_log'] = current_time
+    
+    return mexico_naive
 
 def format_mexico_datetime(dt: Optional[datetime] = None) -> str:
     """
