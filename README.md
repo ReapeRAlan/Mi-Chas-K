@@ -1,6 +1,6 @@
-# 🌮 MiChaska - Sistema de Facturación
+# 🌮 Mi Chas-K - Sistema de Facturación
 
-Sistema de punto de venta completo desarrollado en Python con Streamlit, diseñado para el restaurante MiChaska. **Adaptado para deployment en Render con PostgreSQL**.
+Sistema de punto de venta completo desarrollado en Python con Streamlit, diseñado para el restaurante Mi Chas-K. **Adaptado para deployment en Render con PostgreSQL**.
 
 ## 🚀 Características Principales
 
@@ -11,7 +11,7 @@ Sistema de punto de venta completo desarrollado en Python con Streamlit, diseña
 - **Base de Datos en la Nube**: PostgreSQL para máxima confiabilidad
 - **Responsive Design**: Optimizado para dispositivos móviles y desktop
 
-## 🏪 Menú MiChaska
+## 🏪 Menú Mi Chas-K
 
 ### Chascas
 - Chasca Mini ($20.00)
@@ -136,3 +136,108 @@ Este proyecto está bajo la licencia MIT. Ver `LICENSE` para más detalles.
 **🌮 MiChaska - La mejor chasca de la ciudad** 
 
 *Desarrollado con ❤️ para optimizar las ventas y brindar la mejor experiencia al cliente*
+
+## 🆕 Nuevas Funcionalidades Implementadas
+
+### 🕰️ Sistema de Zona Horaria UTC-6 (México)
+- **Sincronización automática** con servidores de tiempo mexicanos
+- **Ping a WorldTimeAPI** para obtener hora exacta de México
+- **Registros precisos** con zona horaria local correcta
+- **Fallback inteligente** a tiempo local si no hay conexión
+
+### 👥 Sistema de Vendedores Avanzado
+- **Menú desplegable** con vendedores predefinidos
+- **Opción "Agregar nuevo vendedor"** para casos especiales
+- **Base de datos de vendedores** persistente
+- **Tracking por empleado** en todas las ventas
+
+### 📋 Gestión Completa de Órdenes
+- **Visualización de todas las órdenes** con filtros avanzados
+- **Modificación de órdenes existentes** (productos, cantidades, precios)
+- **Reimpresión de tickets** para órdenes modificadas
+- **Búsqueda por fecha, vendedor o monto**
+- **Control de stock automático** al modificar órdenes
+
+### 💰 Dashboard Financiero Completo
+- **Gestión de gastos diarios** por categorías (Operación, Compras, Servicios, etc.)
+- **Sistema de corte de caja** con detección de diferencias
+- **Análisis de inversión vs ganancia** con gráficos interactivos
+- **Control de dinero inicial y final** del día
+- **Resumen financiero** con márgenes de ganancia
+
+### 🛠️ Herramientas de Desarrollo
+- **Script `dev_tools.sh`** para desarrollo local completo
+- **Script `sync_github.sh`** para sincronización segura con GitHub
+- **Backups automáticos** antes de cada sincronización
+- **Detección de archivos sensibles** antes de commit
+
+## 📊 Nuevas Secciones del Dashboard
+
+### 💰 Gestión de Gastos
+- Registro de gastos por concepto y categoría
+- Seguimiento por vendedor que realizó el gasto
+- Números de comprobante para control
+- Análisis por categorías con gráficos
+
+### 📋 Corte de Caja
+- Control diario de efectivo
+- Cálculo automático de dinero esperado vs real
+- Registro de ventas en efectivo vs tarjeta
+- Detección automática de diferencias
+
+### 📈 Resumen Financiero
+- Comparativo ingresos vs gastos
+- Cálculo de margen de ganancia
+- Análisis por períodos personalizables
+- Gráficos de distribución financiera
+
+## 🗄️ Nuevas Tablas de Base de Datos
+
+```sql
+-- Tabla de gastos diarios
+gastos_diarios (
+    id, fecha, concepto, monto, categoria, 
+    descripcion, comprobante, vendedor, fecha_registro
+)
+
+-- Tabla de cortes de caja
+cortes_caja (
+    id, fecha, dinero_inicial, dinero_final, 
+    ventas_efectivo, ventas_tarjeta, total_gastos, 
+    diferencia, observaciones, vendedor, fecha_registro
+)
+
+-- Tabla de vendedores
+vendedores (
+    id, nombre, activo, fecha_registro
+)
+```
+
+## 🚀 Inicio Rápido para Desarrollo
+
+1. **Usar herramientas de desarrollo:**
+```bash
+./dev_tools.sh
+```
+
+2. **Sincronizar cambios con GitHub:**
+```bash
+./sync_github.sh
+```
+
+3. **Ejecutar manualmente:**
+```bash
+# Instalar dependencias
+pip install -r requirements.txt
+
+# Ejecutar aplicación
+streamlit run app.py
+```
+
+## 📱 Navegación Actualizada
+
+- 🛒 **Punto de Venta** - Procesar ventas con vendedores
+- 📦 **Inventario** - Gestionar productos y categorías
+- 📋 **Órdenes** - Ver, modificar y reimprimir tickets
+- 📊 **Dashboard** - Análisis de ventas, gastos y cortes de caja
+- ⚙️ **Configuración** - Ajustes del sistema
