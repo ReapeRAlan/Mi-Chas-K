@@ -88,7 +88,7 @@ def mostrar_gestion_gastos():
     # Selector de fecha
     fecha_seleccionada = st.date_input(
         "Fecha:",
-        value=datetime.now().date(),
+        value=get_mexico_datetime().date(),
         key="fecha_gastos"
     )
     fecha_str = str(fecha_seleccionada)
@@ -202,7 +202,7 @@ def mostrar_corte_caja():
     # Selector de fecha
     fecha_seleccionada = st.date_input(
         "Fecha del corte:",
-        value=datetime.now().date(),
+        value=get_mexico_datetime().date(),
         key="fecha_corte"
     )
     fecha_str = str(fecha_seleccionada)
@@ -328,10 +328,10 @@ def mostrar_resumen_financiero():
     col1, col2 = st.columns(2)
     
     with col1:
-        fecha_inicio = st.date_input("Desde:", value=datetime.now().date() - timedelta(days=30), key="resumen_fecha_inicio")
+        fecha_inicio = st.date_input("Desde:", value=get_mexico_datetime().date() - timedelta(days=30), key="resumen_fecha_inicio")
     
     with col2:
-        fecha_fin = st.date_input("Hasta:", value=datetime.now().date(), key="resumen_fecha_fin")
+        fecha_fin = st.date_input("Hasta:", value=get_mexico_datetime().date(), key="resumen_fecha_fin")
     
     # Obtener datos del período
     fecha_inicio_str = str(fecha_inicio)
@@ -421,7 +421,7 @@ def mostrar_metricas_ventas(ventas):
     
     with col4:
         # Ventas de hoy
-        ventas_hoy = len([v for v in ventas if v.fecha.date() == datetime.now().date()])
+        ventas_hoy = len([v for v in ventas if v.fecha.date() == get_mexico_datetime().date()])
         st.metric("Ventas Hoy", ventas_hoy)
 
 def mostrar_grafico_ventas_diarias(ventas):

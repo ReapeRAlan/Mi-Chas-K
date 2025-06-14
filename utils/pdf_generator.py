@@ -8,6 +8,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib import colors
 from datetime import datetime
+from utils.timezone_utils import get_mexico_datetime, format_mexico_datetime
 import os
 import io
 from database.models import Venta, DetalleVenta, Producto
@@ -99,7 +100,7 @@ class TicketGenerator:
         if venta.fecha:
             story.append(Paragraph(f"Fecha: {venta.fecha.strftime('%d/%m/%Y %H:%M')}", style_normal))
         else:
-            story.append(Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_normal))
+            story.append(Paragraph(f"Fecha: {format_mexico_datetime(get_mexico_datetime())}", style_normal))
         story.append(Paragraph(f"Método: {venta.metodo_pago}", style_normal))
         
         if venta.vendedor:
@@ -160,7 +161,7 @@ class TicketGenerator:
         story.append(Spacer(1, 5*mm))
         story.append(Paragraph("=" * 30, style_normal))
         story.append(Paragraph(mensaje_ticket, style_subtitulo))
-        story.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_subtitulo))
+        story.append(Paragraph(f"Generado: {format_mexico_datetime(get_mexico_datetime())}", style_subtitulo))
         
         # Construir PDF
         doc.build(story)
@@ -176,7 +177,7 @@ class TicketGenerator:
         """Genera un ticket PDF para la venta (método legacy)"""
         if not ruta_salida:
             os.makedirs("tickets", exist_ok=True)
-            ruta_salida = f"tickets/ticket_{venta.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            ruta_salida = f"tickets/ticket_{venta.id}_{get_mexico_datetime().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         # Generar en memoria y guardar a archivo
         pdf_bytes = self.generar_ticket_memoria(venta)
@@ -191,7 +192,7 @@ def generar_reporte_ventas(fecha_inicio: str, fecha_fin: str, ruta_salida: str =
     """Genera un reporte de ventas en PDF"""
     if ruta_salida == "":
         os.makedirs("reportes", exist_ok=True)
-        ruta_salida = f"reportes/reporte_ventas_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        ruta_salida = f"reportes/reporte_ventas_{get_mexico_datetime().strftime('%Y%m%d_%H%M%S')}.pdf"
     
     doc = SimpleDocTemplate(ruta_salida, pagesize=A4)
     styles = getSampleStyleSheet()
@@ -220,7 +221,7 @@ def generar_reporte_ventas(fecha_inicio: str, fecha_fin: str, ruta_salida: str =
             elif venta.fecha is not None:
                 fecha_venta = venta.fecha
             else:
-                fecha_venta = datetime.now()
+                fecha_venta = get_mexico_datetime()
                 
             data.append([
                 str(venta.id),

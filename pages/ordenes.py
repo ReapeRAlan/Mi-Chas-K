@@ -44,13 +44,13 @@ def mostrar_lista_ordenes():
     with col1:
         fecha_desde = st.date_input(
             "Desde:",
-            value=datetime.now().date() - timedelta(days=7)
+            value=get_mexico_datetime().date() - timedelta(days=7)
         )
     
     with col2:
         fecha_hasta = st.date_input(
             "Hasta:",
-            value=datetime.now().date()
+            value=get_mexico_datetime().date()
         )
     
     with col3:

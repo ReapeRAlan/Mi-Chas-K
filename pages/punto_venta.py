@@ -326,7 +326,7 @@ def mostrar_opciones_post_venta(venta):
                     st.download_button(
                         label="📥 Ticket Generado - Hacer clic para descargar",
                         data=pdf_bytes,
-                        file_name=f"ticket_{venta.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                        file_name=f"ticket_{venta.id}_{get_mexico_datetime().strftime('%Y%m%d_%H%M%S')}.pdf",
                         mime="application/pdf",
                         use_container_width=True
                     )

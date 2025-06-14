@@ -5,6 +5,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 from typing import Optional, Union
 from decimal import Decimal
+from utils.timezone_utils import get_mexico_datetime
 
 def format_currency(amount: Union[float, Decimal, str], currency: str = "MXN") -> str:
     """Formatea un monto como moneda"""
@@ -34,7 +35,7 @@ def format_datetime(dt: Union[datetime, str, None], format_str: str = "%d/%m/%Y 
 
 def get_date_range_options():
     """Retorna opciones comunes de rangos de fecha"""
-    hoy = datetime.now().date()
+    hoy = get_mexico_datetime().date()
     ayer = hoy - timedelta(days=1)
     semana_pasada = hoy - timedelta(days=7)
     mes_pasado = hoy - timedelta(days=30)

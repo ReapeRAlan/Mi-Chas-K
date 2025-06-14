@@ -4,6 +4,7 @@ Página de configuración del sistema
 import streamlit as st
 from database.connection import execute_query, execute_update
 from utils.helpers import show_success_message, show_error_message
+from utils.timezone_utils import get_mexico_datetime
 
 def mostrar_configuracion():
     """Página principal de configuración"""
@@ -199,7 +200,7 @@ def mostrar_config_sistema():
                     from datetime import datetime, timedelta
                     
                     # Calcular fecha límite
-                    fecha_limite = datetime.now() - timedelta(days=dias_antiguedad)
+                    fecha_limite = get_mexico_datetime() - timedelta(days=dias_antiguedad)
                     fecha_str = fecha_limite.strftime('%Y-%m-%d')
                     
                     # Contar ventas que se van a eliminar
@@ -288,7 +289,7 @@ def realizar_respaldo():
         os.makedirs("respaldos", exist_ok=True)
         
         # Nombre del archivo de respaldo
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = get_mexico_datetime().strftime("%Y%m%d_%H%M%S")
         archivo_respaldo = f"respaldos/michaska_backup_{timestamp}.db"
         
         # Copiar la base de datos
@@ -327,7 +328,7 @@ def mostrar_dialogo_limpieza():
         if st.form_submit_button("🗑️ Eliminar Ventas Antiguas") and confirmacion:
             try:
                 from datetime import datetime, timedelta
-                fecha_limite = datetime.now() - timedelta(days=dias_antiguedad)
+                fecha_limite = get_mexico_datetime() - timedelta(days=dias_antiguedad)
                 
                 # Primero eliminar detalles de venta
                 execute_update(
