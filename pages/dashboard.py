@@ -10,6 +10,7 @@ from database.models import Venta, Producto, GastoDiario, CorteCaja, Vendedor
 from database.connection import execute_query
 from utils.helpers import format_currency, get_date_range_options
 from utils.timezone_utils import get_mexico_date_str, get_mexico_datetime
+import io
 
 def mostrar_dashboard():
     """Página principal del dashboard"""
@@ -196,107 +197,249 @@ def ver_gastos(fecha: str):
     st.dataframe(df_gastos, use_container_width=True)
 
 def mostrar_corte_caja():
-    """Realizar corte de caja diario"""
+    """Página de corte de caja mejorada con comparación detallada"""
     st.subheader("📋 Corte de Caja")
     
     # Selector de fecha
-    fecha_seleccionada = st.date_input(
-        "Fecha del corte:",
-        value=get_mexico_datetime().date(),
-        key="fecha_corte"
-    )
-    fecha_str = str(fecha_seleccionada)
+    col1, col2 = st.columns([2, 1])
     
-    # Verificar si ya existe corte para esta fecha
-    corte_existente = CorteCaja.get_by_fecha(fecha_str)
+    with col1:
+        fecha_hoy = get_mexico_datetime().date()
+        fecha_seleccionada = st.date_input("Fecha del corte:", value=fecha_hoy, key="corte_fecha")
+        fecha_str = str(fecha_seleccionada)
     
-    if corte_existente:
-        st.warning(f"Ya existe un corte de caja para el {fecha_str}")
-        mostrar_corte_existente(corte_existente)
+    with col2:
+        st.markdown("### 📊 Acciones")
+        if st.button("📄 Generar Reporte del Día", key="btn_reporte_dia"):
+            generar_reporte_diario(fecha_str)
+    
+    # Tabs para diferentes secciones
+    tab1, tab2, tab3 = st.tabs([
+        "💰 Nuevo Corte", 
+        "📊 Comparación Detallada",
+        "📋 Historial de Cortes"
+    ])
+    
+    with tab1:
+        realizar_corte_caja(fecha_str)
+    
+    with tab2:
+        mostrar_comparacion_detallada(fecha_str)
+    
+    with tab3:
+        mostrar_historial_cortes()
+
+def mostrar_comparacion_detallada(fecha: str):
+    """Comparación detallada entre total de caja y total de ventas registradas"""
+    st.write("### 🔍 Análisis Caja vs Ventas Registradas")
+    
+    # Obtener datos del día
+    ventas = Venta.get_by_fecha(fecha, fecha)
+    gastos = GastoDiario.get_by_fecha(fecha)
+    corte = CorteCaja.get_by_fecha(fecha)
+    
+    if not ventas and not gastos and not corte:
+        st.info("📊 No hay datos registrados para esta fecha")
         return
     
-    # Obtener datos automáticos del día
-    ventas_dia = Venta.get_by_fecha(fecha_str, fecha_str)
-    gastos_dia = GastoDiario.get_by_fecha(fecha_str)
+    # Cálculos de ventas registradas
+    total_ventas_registradas = sum(v.total for v in ventas)
+    ventas_efectivo_reg = sum(v.total for v in ventas if v.metodo_pago.lower() == 'efectivo')
+    ventas_tarjeta_reg = sum(v.total for v in ventas if v.metodo_pago.lower() == 'tarjeta')
+    ventas_transferencia_reg = sum(v.total for v in ventas if v.metodo_pago.lower() == 'transferencia')
+    total_gastos_reg = sum(g.monto for g in gastos)
     
-    # Calcular totales automáticos
-    ventas_efectivo = sum(v.total for v in ventas_dia if v.metodo_pago == "Efectivo")
-    ventas_tarjeta = sum(v.total for v in ventas_dia if v.metodo_pago in ["Tarjeta", "Transferencia"])
-    total_gastos = sum(g.monto for g in gastos_dia)
+    # Datos del corte de caja (si existe)
+    dinero_inicial_caja = corte.dinero_inicial if corte else 0
+    ventas_efectivo_caja = corte.ventas_efectivo if corte else 0
+    ventas_tarjeta_caja = corte.ventas_tarjeta if corte else 0
+    ventas_transferencia_caja = getattr(corte, 'ventas_transferencia', 0) if corte else 0
+    total_gastos_caja = corte.total_gastos if corte else 0
+    dinero_final_caja = corte.dinero_final if corte else 0
     
-    # Formulario de corte
-    with st.form("corte_caja"):
-        st.write("### 💰 Información del Corte")
+    # Layout en dos columnas principales
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📋 **VENTAS REGISTRADAS**")
+        st.markdown("*Datos del sistema de ventas*")
         
-        col1, col2 = st.columns(2)
+        # Métricas de ventas registradas
+        st.metric("Total Ventas", f"${total_ventas_registradas:,.2f}", help="Suma de todas las ventas en el sistema")
+        
+        col1_1, col1_2 = st.columns(2)
+        with col1_1:
+            st.metric("Efectivo", f"${ventas_efectivo_reg:,.2f}")
+            st.metric("Transferencia", f"${ventas_transferencia_reg:,.2f}")
+        with col1_2:
+            st.metric("Tarjeta", f"${ventas_tarjeta_reg:,.2f}")
+            st.metric("Gastos", f"${total_gastos_reg:,.2f}")
+        
+        # Ganancia teórica
+        ganancia_teorica = total_ventas_registradas - total_gastos_reg
+        st.metric("Ganancia Teórica", f"${ganancia_teorica:,.2f}", delta=ganancia_teorica)
+        
+        # Dinero esperado en caja
+        dinero_esperado = dinero_inicial_caja + ventas_efectivo_reg - total_gastos_reg
+        st.metric("Dinero Esperado en Caja", f"${dinero_esperado:,.2f}", help="Inicial + Efectivo - Gastos")
+    
+    with col2:
+        st.markdown("#### 💰 **CORTE DE CAJA**")
+        st.markdown("*Datos del conteo físico*")
+        
+        if corte:
+            # Total registrado en corte
+            total_corte = ventas_efectivo_caja + ventas_tarjeta_caja + ventas_transferencia_caja
+            st.metric("Total Corte", f"${total_corte:,.2f}", help="Suma del corte de caja")
+            
+            col2_1, col2_2 = st.columns(2)
+            with col2_1:
+                st.metric("Efectivo", f"${ventas_efectivo_caja:,.2f}")
+                st.metric("Transferencia", f"${ventas_transferencia_caja:,.2f}")
+            with col2_2:
+                st.metric("Tarjeta", f"${ventas_tarjeta_caja:,.2f}")
+                st.metric("Gastos", f"${total_gastos_caja:,.2f}")
+            
+            # Ganancia real
+            ganancia_real = total_corte - total_gastos_caja
+            st.metric("Ganancia Real", f"${ganancia_real:,.2f}", delta=ganancia_real)
+            
+            # Dinero final en caja
+            st.metric("Dinero Final en Caja", f"${dinero_final_caja:,.2f}", help="Conteo físico de dinero")
+            
+        else:
+            st.warning("⚠️ No se ha realizado corte de caja para esta fecha")
+            st.info("Realiza el corte en la pestaña 'Nuevo Corte' para ver la comparación completa")
+    
+    # Análisis de diferencias
+    if corte:
+        st.markdown("---")
+        st.markdown("### 🔍 **ANÁLISIS DE DIFERENCIAS**")
+        
+        col3, col4, col5 = st.columns(3)
+        
+        with col3:
+            # Diferencias por método de pago
+            st.markdown("#### Métodos de Pago")
+            diff_efectivo = ventas_efectivo_caja - ventas_efectivo_reg
+            diff_tarjeta = ventas_tarjeta_caja - ventas_tarjeta_reg
+            diff_transferencia = ventas_transferencia_caja - ventas_transferencia_reg
+            
+            st.metric("Dif. Efectivo", f"${diff_efectivo:,.2f}", delta=diff_efectivo if diff_efectivo != 0 else None)
+            st.metric("Dif. Tarjeta", f"${diff_tarjeta:,.2f}", delta=diff_tarjeta if diff_tarjeta != 0 else None)
+            st.metric("Dif. Transferencia", f"${diff_transferencia:,.2f}", delta=diff_transferencia if diff_transferencia != 0 else None)
+        
+        with col4:
+            # Diferencias en totales
+            st.markdown("#### Totales")
+            total_corte = ventas_efectivo_caja + ventas_tarjeta_caja + ventas_transferencia_caja
+            diff_ventas_total = total_corte - total_ventas_registradas
+            diff_gastos = total_gastos_caja - total_gastos_reg
+            diff_ganancia = (total_corte - total_gastos_caja) - ganancia_teorica
+            
+            st.metric("Dif. Ventas Total", f"${diff_ventas_total:,.2f}", delta=diff_ventas_total if diff_ventas_total != 0 else None)
+            st.metric("Dif. Gastos", f"${diff_gastos:,.2f}", delta=diff_gastos if diff_gastos != 0 else None)
+            st.metric("Dif. Ganancia", f"${diff_ganancia:,.2f}", delta=diff_ganancia if diff_ganancia != 0 else None)
+        
+        with col5:
+            # Diferencia en caja física
+            st.markdown("#### Caja Física")
+            diff_caja = dinero_final_caja - dinero_esperado
+            
+            # Indicador visual
+            if abs(diff_caja) < 1:
+                st.success("✅ Caja cuadrada")
+            elif abs(diff_caja) < 10:
+                st.warning("⚠️ Diferencia menor")
+            else:
+                st.error("❌ Diferencia significativa")
+            
+            st.metric("Diferencia en Caja", f"${diff_caja:,.2f}", delta=diff_caja if diff_caja != 0 else None)
+            
+            # Porcentaje de exactitud
+            exactitud = 100 - (abs(diff_caja) / dinero_esperado * 100) if dinero_esperado > 0 else 0
+            st.metric("Exactitud", f"{max(0, exactitud):.1f}%")
+        
+        # Casos específicos y recomendaciones
+        st.markdown("### 💡 **CASOS Y RECOMENDACIONES**")
+        
+        if abs(diff_caja) < 1:
+            st.success("✅ **PERFECTO**: La caja cuadra perfectamente. Excelente control.")
+        elif diff_caja > 0:
+            st.info(f"💰 **SOBRANTE**: Hay ${diff_caja:,.2f} de más en caja. Posibles causas:\n"
+                   "- Venta no registrada en el sistema\n"
+                   "- Error en el conteo\n"
+                   "- Dinero de días anteriores")
+        else:
+            st.warning(f"💸 **FALTANTE**: Faltan ${abs(diff_caja):,.2f} en caja. Posibles causas:\n"
+                      "- Gasto no registrado\n"
+                      "- Error en el conteo\n"
+                      "- Venta registrada pero dinero usado para otros fines")
+
+def generar_reporte_diario(fecha: str):
+    """Genera y descarga el reporte diario completo"""
+    try:
+        from utils.pdf_generator import ReporteGenerator
+        
+        generator = ReporteGenerator()
+        pdf_bytes = generator.generar_reporte_diario(fecha)
+        
+        st.download_button(
+            label="📄 Descargar Reporte Completo",
+            data=pdf_bytes,
+            file_name=f"reporte_diario_{fecha}.pdf",
+            mime="application/pdf",
+            key="download_reporte"
+        )
+        
+        st.success(f"✅ Reporte del {fecha} generado exitosamente")
+        
+    except Exception as e:
+        st.error(f"❌ Error al generar reporte: {str(e)}")
+
+def mostrar_historial_cortes():
+    """Mostrar historial de cortes de caja"""
+    st.write("### 📋 Historial de Cortes")
+    
+    # Obtener cortes recientes
+    query = """
+        SELECT * FROM cortes_caja 
+        ORDER BY fecha DESC 
+        LIMIT 30
+    """
+    cortes = execute_query(query)
+    
+    if cortes:
+        df_cortes = pd.DataFrame(cortes)
+        
+        # Calcular diferencias para cada corte
+        df_cortes['dinero_esperado'] = df_cortes['dinero_inicial'] + df_cortes['ventas_efectivo'] - df_cortes['total_gastos']
+        df_cortes['diferencia'] = df_cortes['dinero_final'] - df_cortes['dinero_esperado']
+        df_cortes['exactitud'] = 100 - (abs(df_cortes['diferencia']) / df_cortes['dinero_esperado'] * 100)
+        
+        # Formatear para mostrar
+        df_display = df_cortes[['fecha', 'vendedor', 'dinero_inicial', 'dinero_final', 'diferencia', 'exactitud']].copy()
+        df_display['exactitud'] = df_display['exactitud'].round(1)
+        
+        st.dataframe(df_display, use_container_width=True)
+        
+        # Estadísticas del historial
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.write("**Datos Automáticos:**")
-            st.metric("Ventas en Efectivo", f"${ventas_efectivo:,.2f}")
-            st.metric("Ventas con Tarjeta", f"${ventas_tarjeta:,.2f}")
-            st.metric("Total Gastos", f"${total_gastos:,.2f}")
+            promedio_diferencia = df_cortes['diferencia'].mean()
+            st.metric("Diferencia Promedio", f"${promedio_diferencia:,.2f}")
         
         with col2:
-            st.write("**Datos a Capturar:**")
-            dinero_inicial = st.number_input(
-                "Dinero inicial en caja:", 
-                min_value=0.0, 
-                step=0.01,
-                help="¿Con cuánto dinero inició el día?"
-            )
-            
-            dinero_final = st.number_input(
-                "Dinero final en caja:", 
-                min_value=0.0, 
-                step=0.01,
-                help="¿Cuánto dinero hay físicamente en la caja?"
-            )
-            
-            vendedores = Vendedor.get_nombres_activos()
-            vendedor = st.selectbox("Quien realiza el corte:", vendedores if vendedores else ["Sin especificar"])
+            exactitud_promedio = df_cortes['exactitud'].mean()
+            st.metric("Exactitud Promedio", f"{exactitud_promedio:.1f}%")
         
-        observaciones = st.text_area("Observaciones:", placeholder="Notas adicionales sobre el corte...")
-        
-        # Cálculo previo
-        dinero_esperado = dinero_inicial + ventas_efectivo - total_gastos
-        diferencia = dinero_final - dinero_esperado
-        
-        if dinero_inicial > 0 and dinero_final > 0:
-            st.write("### 📊 Cálculo Preliminar")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Dinero Esperado", f"${dinero_esperado:,.2f}")
-            
-            with col2:
-                st.metric("Dinero Real", f"${dinero_final:,.2f}")
-            
-            with col3:
-                color = "normal" if abs(diferencia) < 1 else "inverse"
-                st.metric("Diferencia", f"${diferencia:,.2f}", delta=diferencia if diferencia != 0 else None)
-        
-        submitted = st.form_submit_button("💾 Guardar Corte de Caja", type="primary")
-        
-        if submitted:
-            if dinero_inicial >= 0 and dinero_final >= 0:
-                try:
-                    corte = CorteCaja(
-                        fecha=fecha_str,
-                        dinero_inicial=dinero_inicial,
-                        dinero_final=dinero_final,
-                        ventas_efectivo=ventas_efectivo,
-                        ventas_tarjeta=ventas_tarjeta,
-                        total_gastos=total_gastos,
-                        observaciones=observaciones,
-                        vendedor=vendedor
-                    )
-                    corte.save()
-                    st.success("✅ Corte de caja guardado exitosamente")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al guardar corte: {str(e)}")
-            else:
-                st.error("Por favor completa todos los campos requeridos")
+        with col3:
+            cortes_perfectos = len(df_cortes[abs(df_cortes['diferencia']) < 1])
+            st.metric("Cortes Perfectos", f"{cortes_perfectos}/{len(df_cortes)}")
+    
+    else:
+        st.info("📊 No hay cortes de caja registrados")
 
 def mostrar_corte_existente(corte: CorteCaja):
     """Muestra un corte de caja existente"""
@@ -520,3 +663,169 @@ def mostrar_grafico_vendedores(ventas):
             title='Ventas por Vendedor'
         )
         st.plotly_chart(fig, use_container_width=True)
+
+def realizar_corte_caja(fecha: str):
+    """Formulario para realizar corte de caja"""
+    st.write("### 💰 Realizar Corte de Caja")
+    
+    # Verificar si ya existe corte para esta fecha
+    corte_existente = CorteCaja.get_by_fecha(fecha)
+    
+    if corte_existente:
+        st.warning(f"⚠️ Ya existe un corte de caja para el {fecha}")
+        mostrar_corte_existente(corte_existente)
+        
+        if st.button("🔄 Realizar Nuevo Corte", key="nuevo_corte_btn"):
+            st.session_state.realizar_nuevo_corte = True
+            st.rerun()
+        
+        if not st.session_state.get('realizar_nuevo_corte', False):
+            return
+    
+    # Obtener datos automáticos del día
+    ventas_dia = Venta.get_by_fecha(fecha, fecha)
+    gastos_dia = GastoDiario.get_by_fecha(fecha)
+    
+    # Calcular totales automáticos por método de pago
+    ventas_efectivo = sum(v.total for v in ventas_dia if v.metodo_pago.lower() == "efectivo")
+    ventas_tarjeta = sum(v.total for v in ventas_dia if v.metodo_pago.lower() == "tarjeta")
+    ventas_transferencia = sum(v.total for v in ventas_dia if v.metodo_pago.lower() == "transferencia")
+    total_gastos = sum(g.monto for g in gastos_dia)
+    
+    # Mostrar resumen del día
+    st.markdown("#### 📊 Resumen del Día")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Ventas Efectivo", f"${ventas_efectivo:,.2f}")
+    with col2:
+        st.metric("Ventas Tarjeta", f"${ventas_tarjeta:,.2f}")
+    with col3:
+        st.metric("Ventas Transferencia", f"${ventas_transferencia:,.2f}")
+    with col4:
+        st.metric("Total Gastos", f"${total_gastos:,.2f}")
+    
+    # Formulario de corte
+    with st.form("corte_caja_form"):
+        st.markdown("#### 💰 Datos del Corte")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Dinero en Caja:**")
+            dinero_inicial = st.number_input(
+                "Dinero inicial:", 
+                min_value=0.0, 
+                step=0.01,
+                help="¿Con cuánto dinero inició el día?"
+            )
+            
+            dinero_final = st.number_input(
+                "Dinero final (conteo físico):", 
+                min_value=0.0, 
+                step=0.01,
+                help="¿Cuánto dinero hay físicamente en la caja?"
+            )
+        
+        with col2:
+            st.write("**Verificación de Ventas:**")
+            ventas_efectivo_real = st.number_input(
+                "Ventas efectivo (real):", 
+                value=float(ventas_efectivo),
+                step=0.01,
+                help="Ajustar si hay diferencias con el sistema"
+            )
+            
+            ventas_tarjeta_real = st.number_input(
+                "Ventas tarjeta (real):", 
+                value=float(ventas_tarjeta),
+                step=0.01,
+                help="Ajustar si hay diferencias con el sistema"
+            )
+            
+            ventas_transferencia_real = st.number_input(
+                "Ventas transferencia (real):", 
+                value=float(ventas_transferencia),
+                step=0.01,
+                help="Ajustar si hay diferencias con el sistema"
+            )
+            
+            gastos_real = st.number_input(
+                "Gastos (real):", 
+                value=float(total_gastos),
+                step=0.01,
+                help="Ajustar si hay gastos no registrados"
+            )
+        
+        # Información adicional
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            vendedores = Vendedor.get_nombres_activos()
+            vendedor = st.selectbox(
+                "Quien realiza el corte:", 
+                vendedores if vendedores else ["Sin especificar"]
+            )
+        
+        with col4:
+            observaciones = st.text_area(
+                "Observaciones:", 
+                placeholder="Notas adicionales sobre el corte...",
+                height=100
+            )
+        
+        # Cálculo previo
+        if dinero_inicial >= 0 and dinero_final >= 0:
+            dinero_esperado = dinero_inicial + ventas_efectivo_real - gastos_real
+            diferencia = dinero_final - dinero_esperado
+            
+            st.markdown("#### 📊 Cálculo Preliminar")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("Dinero Esperado", f"${dinero_esperado:,.2f}")
+            
+            with col2:
+                st.metric("Dinero Real", f"${dinero_final:,.2f}")
+            
+            with col3:
+                st.metric("Diferencia", f"${diferencia:,.2f}", delta=diferencia if diferencia != 0 else None)
+            
+            with col4:
+                if abs(diferencia) < 1:
+                    st.success("✅ Perfecto")
+                elif abs(diferencia) < 10:
+                    st.warning("⚠️ Diferencia menor")
+                else:
+                    st.error("❌ Revisar")
+        
+        submitted = st.form_submit_button("💾 Guardar Corte de Caja", type="primary")
+        
+        if submitted:
+            if dinero_inicial >= 0 and dinero_final >= 0:
+                try:
+                    # Si existe corte, eliminarlo primero
+                    if corte_existente:
+                        # Aquí podrías agregar lógica para actualizar en lugar de crear nuevo
+                        pass
+                    
+                    corte = CorteCaja(
+                        fecha=fecha,
+                        dinero_inicial=dinero_inicial,
+                        dinero_final=dinero_final,
+                        ventas_efectivo=ventas_efectivo_real,
+                        ventas_tarjeta=ventas_tarjeta_real,
+                        total_gastos=gastos_real,
+                        observaciones=observaciones,
+                        vendedor=vendedor
+                    )
+                    corte.save()
+                    
+                    st.success("✅ Corte de caja guardado exitosamente")
+                    st.session_state.realizar_nuevo_corte = False
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error al guardar corte: {str(e)}")
+            else:
+                st.error("⚠️ Por favor completa todos los campos requeridos")

@@ -261,3 +261,169 @@ def generar_reporte_ventas(fecha_inicio: str, fecha_fin: str, ruta_salida: str =
     
     doc.build(story)
     return ruta_salida
+
+class ReporteGenerator:
+    def __init__(self):
+        self.page_size = A4
+        
+    def generar_reporte_diario(self, fecha: str) -> bytes:
+        """Genera un reporte completo del día en PDF"""
+        buffer = io.BytesIO()
+        
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=self.page_size,
+            leftMargin=20*mm,
+            rightMargin=20*mm,
+            topMargin=20*mm,
+            bottomMargin=20*mm
+        )
+        
+        story = []
+        styles = getSampleStyleSheet()
+        
+        # Título del reporte
+        titulo = f"REPORTE DIARIO - {fecha}"
+        story.append(Paragraph(titulo, styles['Title']))
+        story.append(Spacer(1, 20))
+        
+        # Información general
+        from database.models import Venta, GastoDiario, CorteCaja
+        
+        # Obtener datos del día
+        ventas = Venta.get_by_fecha(fecha, fecha)
+        gastos = GastoDiario.get_by_fecha(fecha)
+        corte = CorteCaja.get_by_fecha(fecha)
+        
+        # Resumen ejecutivo
+        story.append(Paragraph("📊 RESUMEN EJECUTIVO", styles['Heading2']))
+        
+        total_ventas = sum(v.total for v in ventas)
+        total_gastos = sum(g.monto for g in gastos)
+        ganancia = total_ventas - total_gastos
+        
+        datos_resumen = [
+            ['Concepto', 'Cantidad', 'Monto'],
+            ['Ventas del día', f"{len(ventas)} ventas", f"${total_ventas:,.2f}"],
+            ['Gastos del día', f"{len(gastos)} gastos", f"${total_gastos:,.2f}"],
+            ['Ganancia bruta', '', f"${ganancia:,.2f}"],
+        ]
+        
+        tabla_resumen = Table(datos_resumen, colWidths=[60*mm, 40*mm, 40*mm])
+        tabla_resumen.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(tabla_resumen)
+        story.append(Spacer(1, 20))
+        
+        # Análisis de caja vs ventas
+        story.append(Paragraph("💰 ANÁLISIS CAJA VS VENTAS", styles['Heading2']))
+        
+        if corte:
+            ventas_efectivo = sum(v.total for v in ventas if v.metodo_pago == 'efectivo')
+            ventas_tarjeta = sum(v.total for v in ventas if v.metodo_pago == 'tarjeta')
+            
+            datos_analisis = [
+                ['Concepto', 'Registrado', 'Real', 'Diferencia'],
+                ['Dinero inicial', '', f"${corte.dinero_inicial:,.2f}", ''],
+                ['Ventas efectivo', f"${ventas_efectivo:,.2f}", f"${corte.ventas_efectivo:,.2f}", f"${corte.ventas_efectivo - ventas_efectivo:,.2f}"],
+                ['Ventas tarjeta', f"${ventas_tarjeta:,.2f}", f"${corte.ventas_tarjeta:,.2f}", f"${corte.ventas_tarjeta - ventas_tarjeta:,.2f}"],
+                ['Gastos', f"${total_gastos:,.2f}", f"${corte.total_gastos:,.2f}", f"${corte.total_gastos - total_gastos:,.2f}"],
+                ['Dinero final', '', f"${corte.dinero_final:,.2f}", ''],
+            ]
+            
+            # Calcular diferencia total
+            esperado = corte.dinero_inicial + corte.ventas_efectivo - corte.total_gastos
+            diferencia_total = corte.dinero_final - esperado
+            datos_analisis.append(['DIFERENCIA TOTAL', '', '', f"${diferencia_total:,.2f}"])
+            
+            tabla_analisis = Table(datos_analisis, colWidths=[50*mm, 35*mm, 35*mm, 35*mm])
+            tabla_analisis.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.yellow),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(tabla_analisis)
+        else:
+            story.append(Paragraph("⚠️ No se encontró corte de caja para este día", styles['Normal']))
+        
+        story.append(Spacer(1, 20))
+        
+        # Detalle de ventas
+        if ventas:
+            story.append(Paragraph("🛒 DETALLE DE VENTAS", styles['Heading2']))
+            
+            datos_ventas = [['#', 'Hora', 'Vendedor', 'Método', 'Total']]
+            for i, venta in enumerate(ventas, 1):
+                hora = venta.fecha.strftime("%H:%M")
+                datos_ventas.append([
+                    str(i),
+                    hora,
+                    venta.vendedor or "N/A",
+                    venta.metodo_pago.upper(),
+                    f"${venta.total:,.2f}"
+                ])
+            
+            tabla_ventas = Table(datos_ventas, colWidths=[15*mm, 25*mm, 40*mm, 30*mm, 30*mm])
+            tabla_ventas.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(tabla_ventas)
+            story.append(Spacer(1, 20))
+        
+        # Detalle de gastos
+        if gastos:
+            story.append(Paragraph("💸 DETALLE DE GASTOS", styles['Heading2']))
+            
+            datos_gastos = [['Concepto', 'Categoría', 'Monto', 'Vendedor']]
+            for gasto in gastos:
+                datos_gastos.append([
+                    gasto.concepto[:30] + "..." if len(gasto.concepto) > 30 else gasto.concepto,
+                    gasto.categoria,
+                    f"${gasto.monto:,.2f}",
+                    gasto.vendedor or "N/A"
+                ])
+            
+            tabla_gastos = Table(datos_gastos, colWidths=[50*mm, 30*mm, 30*mm, 30*mm])
+            tabla_gastos.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(tabla_gastos)
+        
+        # Construir PDF
+        doc.build(story)
+        
+        # Obtener bytes del buffer
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        
+        return pdf_bytes
