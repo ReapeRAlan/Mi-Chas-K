@@ -390,16 +390,17 @@ def mostrar_comparacion_detallada(fecha: str):
             
             col2_1, col2_2 = st.columns(2)
             with col2_1:
-                st.metric("Efectivo", f"${ingresos_efectivo_caja:,.2f}")
-                st.metric("Transferencia", f"${ingresos_transferencia_caja:,.2f}")
+                st.metric("Efectivo", f"${ingresos_efectivo_caja:,.2f}", key="caja_efectivo")
+                st.metric("Transferencia", f"${ingresos_transferencia_caja:,.2f}", key="caja_transferencia")
             with col2_2:
-                st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}")
-                st.metric("Gastos", f"${gastos_caja:,.2f}")
+                st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}", key="caja_tarjeta")
+                st.metric("Gastos", f"${gastos_caja:,.2f}", key="caja_gastos")
             
             # DEBUG TEMPORAL: Mostrar qué variables se están usando
             st.text(f"DEBUG UI - Efectivo: ${ingresos_efectivo_caja:.2f}")
             st.text(f"DEBUG UI - Tarjeta: ${ingresos_tarjeta_caja:.2f}")
             st.text(f"DEBUG UI - Transferencia: ${ingresos_transferencia_caja:.2f}")
+            st.text(f"🔍 VERIFICACIÓN: ¿Son diferentes a sistema? E:{ingresos_efectivo_caja != ventas_efectivo_sistema}, T:{ingresos_tarjeta_caja != ventas_tarjeta_sistema}, Tr:{ingresos_transferencia_caja != ventas_transferencia_sistema}")
             
             # Ganancia de la caja
             delta_ganancia_caja = ganancia_caja if ganancia_caja != 0 else None
@@ -411,13 +412,19 @@ def mostrar_comparacion_detallada(fecha: str):
             st.text(f"Inicial:   ${dinero_inicial_caja:,.2f}")
             st.text(f"Efectivo: +${ingresos_efectivo_caja:,.2f}")
             st.text(f"Gastos:   -${gastos_caja:,.2f}")
-            st.text(f"Final:     ${dinero_final_caja:,.2f}")
+            st.text(f"Esperado:  ${dinero_final_calculado:,.2f}")
+            st.text(f"Real:      ${dinero_final_caja:,.2f}")
             
-            # Verificación interna de caja
+            # Verificación interna de caja con explicación clara
             if abs(diferencia_caja_interna) > 0.5:
-                st.warning(f"⚠️ Diferencia interna: ${diferencia_caja_interna:,.2f}")
+                if diferencia_caja_interna > 0:
+                    st.success(f"💰 Sobrante: ${diferencia_caja_interna:,.2f}")
+                    st.info("Hay más dinero del esperado. Posibles causas: dinero inicial no registrado, ventas no contabilizadas, gastos no pagados.")
+                else:
+                    st.error(f"💸 Faltante: ${abs(diferencia_caja_interna):,.2f}")
+                    st.warning("Hay menos dinero del esperado. Revisar si hay gastos adicionales o dinero retirado.")
             else:
-                st.success("✅ Caja cuadrada internamente")
+                st.success("✅ Caja cuadrada perfectamente")
         else:
             st.warning("⚠️ No se ha realizado corte de caja")
             st.info("Realiza el corte en 'Nuevo Corte' para ver los datos reales")
@@ -592,12 +599,37 @@ def mostrar_comparacion_detallada(fecha: str):
         
         # Resumen de estado
         if abs(diferencia_caja_interna) > 1:
-            st.error(f"""
-            🚨 **PROBLEMA EN CAJA FÍSICA**
-            - La caja no cuadra internamente
-            - Diferencia: ${diferencia_caja_interna:,.2f}
-            - Revisar el conteo físico del dinero
-            """)
+            if diferencia_caja_interna > 0:
+                st.info(f"""
+                � **SOBRANTE EN CAJA FÍSICA**: +${diferencia_caja_interna:,.2f}
+                
+                **Posibles causas del sobrante:**
+                - Había dinero inicial que no se registró
+                - Ventas adicionales no contabilizadas en el sistema
+                - Gastos registrados pero no pagados completamente
+                - Dinero de días anteriores
+                
+                **Acciones recomendadas:**
+                - Verificar si había dinero inicial al abrir caja
+                - Revisar si hay ventas sin registrar
+                - Confirmar que todos los gastos fueron pagados
+                """)
+            else:
+                st.error(f"""
+                💸 **FALTANTE EN CAJA FÍSICA**: ${abs(diferencia_caja_interna):,.2f}
+                
+                **Posibles causas del faltante:**
+                - Gastos adicionales no registrados
+                - Dinero retirado de la caja
+                - Errores en el conteo físico
+                
+                **Acciones recomendadas:**
+                - Revisar gastos no registrados
+                - Verificar retiros de dinero
+                - Recontar el dinero físico
+                """)
+        else:
+            st.success("✅ **CAJA PERFECTAMENTE CUADRADA**")
 
 # ...existing code...
 
