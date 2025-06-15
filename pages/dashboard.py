@@ -396,6 +396,11 @@ def mostrar_comparacion_detallada(fecha: str):
                 st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}")
                 st.metric("Gastos", f"${gastos_caja:,.2f}")
             
+            # DEBUG TEMPORAL: Mostrar qué variables se están usando
+            st.text(f"DEBUG UI - Efectivo: ${ingresos_efectivo_caja:.2f}")
+            st.text(f"DEBUG UI - Tarjeta: ${ingresos_tarjeta_caja:.2f}")
+            st.text(f"DEBUG UI - Transferencia: ${ingresos_transferencia_caja:.2f}")
+            
             # Ganancia de la caja
             delta_ganancia_caja = ganancia_caja if ganancia_caja != 0 else None
             st.metric("🎯 Ganancia Real", f"${ganancia_caja:,.2f}", 
@@ -434,6 +439,11 @@ def mostrar_comparacion_detallada(fecha: str):
             diff_efectivo = ingresos_efectivo_caja - ventas_efectivo_sistema
             diff_tarjeta = ingresos_tarjeta_caja - ventas_tarjeta_sistema
             diff_transferencia = ingresos_transferencia_caja - ventas_transferencia_sistema
+            
+            # DEBUG TEMPORAL: Mostrar cálculos de diferencias
+            st.text(f"DEBUG DIFF - Efectivo: {ingresos_efectivo_caja:.2f} - {ventas_efectivo_sistema:.2f} = {diff_efectivo:.2f}")
+            st.text(f"DEBUG DIFF - Tarjeta: {ingresos_tarjeta_caja:.2f} - {ventas_tarjeta_sistema:.2f} = {diff_tarjeta:.2f}")
+            st.text(f"DEBUG DIFF - Transfer: {ingresos_transferencia_caja:.2f} - {ventas_transferencia_sistema:.2f} = {diff_transferencia:.2f}")
             
             st.metric("Efectivo", f"${diff_efectivo:,.2f}", 
                      delta=diff_efectivo if diff_efectivo != 0 else None,
