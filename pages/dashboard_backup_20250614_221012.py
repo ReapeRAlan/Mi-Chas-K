@@ -442,7 +442,113 @@ Diferencia = Sistema - Caja
                 
                 if gastos_df:
                     st.dataframe(pd.DataFrame(gastos_df), use_container_width=True)
+                   - Hay un fondo base que no se registra correctamente
+                
+                **✅ Acciones inmediatas recomendadas:**
+                1. **Verificar dinero inicial real** del día
+                2. **Documentar origen** del dinero físico presente
+                3. **Establecer protocolo** para registro de fondo de caja
+                4. **Corregir registro** si es necesario
+                
+                **🧮 Si el dinero inicial real fuera ${dinero_final_caja + corte.total_gastos - corte.ventas_efectivo:,.2f}:**
+                - Diferencia se reduciría a: ${dinero_final_caja - (dinero_final_caja + corte.total_gastos - corte.ventas_efectivo + corte.ventas_efectivo - corte.total_gastos):,.2f} ✅
+                """)
+            else:
+                st.info(f"""
+                💰 **SOBRANTE DE EFECTIVO**: +${diferencia_efectivo_real:,.2f}
+                
+                **Análisis detallado:**
+                - Dinero inicial: ${corte.dinero_inicial:,.2f}
+                - Ventas efectivo: ${corte.ventas_efectivo:,.2f}
+                - Gastos: ${corte.total_gastos:,.2f}
+                - Efectivo esperado: ${efectivo_esperado:,.2f}
+                - Efectivo real: ${dinero_final_caja:,.2f}
+                - Sobrante: ${diferencia_efectivo_real:,.2f}
+                
+                **Posibles causas:**
+                - Dinero inicial no registrado completamente
+                - Ventas en efectivo no registradas en el sistema
+                - Gastos pagados con dinero de otro origen
+                - Error en el conteo inicial
+            
+            **Acciones recomendadas:**
+            - Verificar si había más dinero inicial
+            - Revisar si hay ventas sin registrar
+            - Confirmar el origen del dinero extra
+            """)
+        else:
+            st.warning(f"""
+            💸 **FALTANTE DE EFECTIVO**: ${abs(diferencia_efectivo_real):,.2f}
+            
+            **Análisis detallado:**
+            - Dinero inicial: ${corte.dinero_inicial:,.2f}
+            - Ventas efectivo: ${corte.ventas_efectivo:,.2f}
+            - Gastos: ${corte.total_gastos:,.2f}
+            - Efectivo esperado: ${efectivo_esperado:,.2f}
+            - Efectivo real: ${dinero_final_caja:,.2f}
+            - Faltante: ${abs(diferencia_efectivo_real):,.2f}
+            
+            **Posibles causas:**
+            - Gastos adicionales pagados en efectivo
+            - Dinero retirado sin registrar
+            - Propinas o gastos menores no registrados
+            - Error en el conteo final
+            
+            **Acciones recomendadas:**
+            - Verificar gastos no registrados
+            - Revisar retiros de dinero
+            - Recontar el dinero físico
+            - Registrar gastos faltantes
+            """)
+        
+        # Análisis de diferencias en registros
+        st.markdown("#### 📊 **Análisis de Registros**")
+        
+        if abs(diff_ventas_efectivo) > 1:
+            if diff_ventas_efectivo > 0:
+                st.info(f"""
+                💰 **EFECTIVO CORTE > SISTEMA**: +${diff_ventas_efectivo:,.2f}
+                - El corte registra más efectivo que el sistema
+                - Posibles ventas no sincronizadas
+                """)
+            else:
+                st.warning(f"""
+                📉 **EFECTIVO SISTEMA > CORTE**: ${abs(diff_ventas_efectivo):,.2f}
+                - El sistema registra más efectivo que el corte
+                - Revisar registros del corte
+                """)
+        
+        if abs(diff_ventas_tarjeta) > 1:
+            if diff_ventas_tarjeta > 0:
+                st.info(f"""
+                💳 **TARJETA CORTE > SISTEMA**: +${diff_ventas_tarjeta:,.2f}
+                - El corte registra más tarjeta que el sistema
+                """)
+            else:
+                st.warning(f"""
+                � **TARJETA SISTEMA > CORTE**: ${abs(diff_ventas_tarjeta):,.2f}
+                - El sistema registra más tarjeta que el corte
+                """)
+        
+        if abs(diff_gastos_sistema) > 1:
+            st.info(f"""
+            💸 **DIFERENCIA EN GASTOS**: ${diff_gastos_sistema:,.2f}
+            - Corte: ${corte.total_gastos:,.2f}
+            - Sistema: ${total_gastos_sistema:,.2f}
+            - Revisar sincronización de gastos
+            """)
+        
+        # Resumen del estado general
+        st.markdown("#### 🎯 **Resumen General**")
+        
+        if abs(diferencia_efectivo_real) <= 1 and abs(diff_ventas_efectivo) <= 1:
+            st.success("🎉 **ESTADO PERFECTO** - Todo cuadra correctamente")
+        elif abs(diferencia_efectivo_real) <= 10:
+            st.warning("⚠️ **DIFERENCIAS MENORES** - Revisar pequeños ajustes")
+        else:
+            st.error("❌ **DIFERENCIAS SIGNIFICATIVAS** - Requiere investigación inmediata")
 
+# ...existing code...
 
 def generar_reporte_diario(fecha: str):
     """Genera y descarga el reporte diario completo"""
