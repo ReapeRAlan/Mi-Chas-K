@@ -11,6 +11,7 @@ from database.connection import execute_query
 from utils.helpers import format_currency, get_date_range_options
 from utils.timezone_utils import get_mexico_date_str, get_mexico_datetime
 import io
+import numpy as np
 
 def mostrar_dashboard():
     """Página principal del dashboard"""
@@ -239,6 +240,23 @@ def mostrar_comparacion_detallada(fecha: str):
     gastos = GastoDiario.get_by_fecha(fecha)
     corte = CorteCaja.get_by_fecha(fecha)
     
+    # DEBUG: Mostrar información del corte
+    if corte:
+        with st.expander("🔍 DEBUG: Datos del Corte"):
+            st.write(f"**Dinero inicial:** ${corte.dinero_inicial}")
+            st.write(f"**Ventas efectivo:** ${corte.ventas_efectivo}")
+            st.write(f"**Ventas tarjeta:** ${corte.ventas_tarjeta}")
+            st.write(f"**Ventas transferencia:** ${getattr(corte, 'ventas_transferencia', 'NO EXISTE')}")
+            st.write(f"**Total gastos:** ${corte.total_gastos}")
+            st.write(f"**Dinero final:** ${corte.dinero_final}")
+    
+    # DEBUG: Mostrar información de ventas del sistema
+    with st.expander("🔍 DEBUG: Ventas del Sistema"):
+        for i, venta in enumerate(ventas[:5]):  # Solo primeras 5
+            st.write(f"**Venta {i+1}:** ${venta.total} - {venta.metodo_pago}")
+        if len(ventas) > 5:
+            st.write(f"... y {len(ventas) - 5} ventas más")
+    
     if not ventas and not gastos and not corte:
         st.info("📊 No hay datos registrados para esta fecha")
         return
@@ -263,6 +281,19 @@ def mostrar_comparacion_detallada(fecha: str):
         ingresos_transferencia_caja = getattr(corte, 'ventas_transferencia', 0)
         gastos_caja = corte.total_gastos                # Lo que realmente se gastó
         dinero_final_caja = corte.dinero_final          # Lo que quedó físicamente
+        
+        # CORRECCIÓN: Si ventas_transferencia no existe en el corte, calcularlo
+        # como la diferencia entre el total y efectivo + tarjeta
+        if not hasattr(corte, 'ventas_transferencia') or ingresos_transferencia_caja == 0:
+            # Si el campo no existe, asumir que las transferencias van como "tarjeta" en el corte
+            # y redistribuir correctamente
+            total_sistema_sin_efectivo = total_ventas_sistema - ventas_efectivo_sistema
+            if total_sistema_sin_efectivo > 0 and ventas_transferencia_sistema > 0:
+                # Redistribuir: lo que está en corte.ventas_tarjeta puede incluir transferencias
+                ingresos_transferencia_caja = ventas_transferencia_sistema  # Usar el del sistema
+                ingresos_tarjeta_caja = corte.ventas_tarjeta - ventas_transferencia_sistema
+                if ingresos_tarjeta_caja < 0:
+                    ingresos_tarjeta_caja = 0
         
         # Cálculo de la caja: Inicial + Ingresos - Gastos = Final esperado
         total_ingresos_caja = ingresos_efectivo_caja + ingresos_tarjeta_caja + ingresos_transferencia_caja
@@ -586,7 +617,7 @@ def mostrar_historial_cortes():
             
             # Redondear exactitud de forma segura
             df_display['exactitud'] = df_display['exactitud'].apply(
-                lambda x: round(float(x), 1) if pd.notnull(x) and not pd.isinf(x) else 0.0
+                lambda x: round(float(x), 1) if pd.notnull(x) and not np.isinf(x) else 0.0
             )
             
             # Formatear números para mejor visualización
@@ -609,7 +640,7 @@ def mostrar_historial_cortes():
             
             with col2:
                 exactitud_promedio = df_cortes['exactitud'].mean()
-                if pd.notnull(exactitud_promedio) and not pd.isinf(exactitud_promedio):
+                if pd.notnull(exactitud_promedio) and not np.isinf(exactitud_promedio):
                     st.metric("Exactitud Promedio", f"{exactitud_promedio:.1f}%")
                 else:
                     st.metric("Exactitud Promedio", "0.0%")
