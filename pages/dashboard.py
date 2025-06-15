@@ -250,19 +250,6 @@ def mostrar_comparacion_detallada(fecha: str):
             st.write(f"**Total gastos:** ${corte.total_gastos}")
             st.write(f"**Dinero final:** ${corte.dinero_final}")
     
-    # DEBUG: Mostrar información de ventas del sistema
-    with st.expander("🔍 DEBUG: Ventas del Sistema"):
-        st.write(f"**Total ventas sistema:** ${total_ventas_sistema}")
-        st.write(f"**Efectivo sistema:** ${ventas_efectivo_sistema}")
-        st.write(f"**Tarjeta sistema:** ${ventas_tarjeta_sistema}")
-        st.write(f"**Transferencia sistema:** ${ventas_transferencia_sistema}")
-        st.write(f"**Gastos sistema:** ${total_gastos_sistema}")
-        st.write("---")
-        for i, venta in enumerate(ventas[:5]):  # Solo primeras 5
-            st.write(f"**Venta {i+1}:** ${venta.total} - {venta.metodo_pago}")
-        if len(ventas) > 5:
-            st.write(f"... y {len(ventas) - 5} ventas más")
-    
     if not ventas and not gastos and not corte:
         st.info("📊 No hay datos registrados para esta fecha")
         return
@@ -276,6 +263,19 @@ def mostrar_comparacion_detallada(fecha: str):
     ventas_transferencia_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'transferencia')
     total_gastos_sistema = sum(g.monto for g in gastos)
     ganancia_sistema = total_ventas_sistema - total_gastos_sistema
+    
+    # DEBUG: Mostrar información de ventas del sistema
+    with st.expander("🔍 DEBUG: Ventas del Sistema"):
+        st.write(f"**Total ventas sistema:** ${total_ventas_sistema}")
+        st.write(f"**Efectivo sistema:** ${ventas_efectivo_sistema}")
+        st.write(f"**Tarjeta sistema:** ${ventas_tarjeta_sistema}")
+        st.write(f"**Transferencia sistema:** ${ventas_transferencia_sistema}")
+        st.write(f"**Gastos sistema:** ${total_gastos_sistema}")
+        st.write("---")
+        for i, venta in enumerate(ventas[:5]):  # Solo primeras 5
+            st.write(f"**Venta {i+1}:** ${venta.total} - {venta.metodo_pago}")
+        if len(ventas) > 5:
+            st.write(f"... y {len(ventas) - 5} ventas más")
     
     # =================================================================
     # CÁLCULOS DE CAJA FÍSICA (LADO B)
