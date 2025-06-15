@@ -390,11 +390,11 @@ def mostrar_comparacion_detallada(fecha: str):
             
             col2_1, col2_2 = st.columns(2)
             with col2_1:
-                st.metric("Efectivo", f"${ingresos_efectivo_caja:,.2f}", key="caja_efectivo")
-                st.metric("Transferencia", f"${ingresos_transferencia_caja:,.2f}", key="caja_transferencia")
+                st.metric("Efectivo", f"${ingresos_efectivo_caja:,.2f}")
+                st.metric("Transferencia", f"${ingresos_transferencia_caja:,.2f}")
             with col2_2:
-                st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}", key="caja_tarjeta")
-                st.metric("Gastos", f"${gastos_caja:,.2f}", key="caja_gastos")
+                st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}")
+                st.metric("Gastos", f"${gastos_caja:,.2f}")
             
             # DEBUG TEMPORAL: Mostrar qué variables se están usando
             st.text(f"DEBUG UI - Efectivo: ${ingresos_efectivo_caja:.2f}")
