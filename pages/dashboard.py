@@ -243,7 +243,30 @@ def mostrar_comparacion_detallada(fecha: str):
     if not ventas and not gastos and not corte:
         st.info("📊 No hay datos registrados para esta fecha")
         return
-    
+
+    # VERIFICACIÓN PREVIA: Detectar casos especiales
+    if corte:
+        efectivo_esperado_previo = corte.dinero_inicial + corte.ventas_efectivo - corte.total_gastos
+        diferencia_previo = corte.dinero_final - efectivo_esperado_previo
+        gastos_superan_efectivo = corte.total_gastos > corte.ventas_efectivo
+        sobrante_significativo = diferencia_previo > 1000
+        
+        if gastos_superan_efectivo and sobrante_significativo and efectivo_esperado_previo < 0:
+            st.error("""
+            🚨 **ALERTA: CASO ESPECIAL DETECTADO**
+            
+            **Situación identificada**: Los gastos superan las ventas en efectivo, pero hay dinero físico presente.
+            Esto indica probablemente un **error en el registro del dinero inicial** o que los **gastos se pagaron con dinero externo**.
+            
+            👀 **Revisar especialmente** la sección de "Análisis Automático" abajo para recomendaciones específicas.
+            """)
+        elif sobrante_significativo:
+            st.warning(f"""
+            ⚠️ **ATENCIÓN: SOBRANTE SIGNIFICATIVO DETECTADO** (+${diferencia_previo:,.2f})
+            
+            Se recomienda revisar el análisis detallado para identificar la causa.
+            """)
+
     # =================================================================
     # CÁLCULOS DEL SISTEMA/APP (LADO A)
     # =================================================================
@@ -465,6 +488,53 @@ Falta dinero en la caja
                 if abs(diferencia_flujo) > 1:
                     diagnosticos.append(f"💰 **Diferencia en flujo de efectivo**: ${diferencia_flujo:,.2f} entre esperado y real")
             
+            # Check 5: ANÁLISIS DE CASOS ESPECIALES
+            # Detectar situaciones financieras específicas
+            efectivo_negativo_esperado = efectivo_esperado < 0
+            sobrante_significativo = diferencia_efectivo_real > 1000
+            gastos_mayores_ventas = gastos_caja > ingresos_efectivo_caja
+            
+            if efectivo_negativo_esperado and sobrante_significativo:
+                st.error("🚨 **CASO ESPECIAL DETECTADO: EFECTIVO NEGATIVO ESPERADO CON SOBRANTE REAL**")
+                st.info(f"""
+**📋 SITUACIÓN IDENTIFICADA:**
+- Gastos (${gastos_caja:,.2f}) > Ventas Efectivo (${ingresos_efectivo_caja:,.2f})
+- Efectivo esperado negativo: ${efectivo_esperado:,.2f}
+- Pero hay dinero físico real: ${dinero_final_caja:,.2f}
+
+**🎯 EXPLICACIÓN MÁS PROBABLE:**
+1. **Dinero inicial mal registrado**: Había ${dinero_final_caja + gastos_caja - ingresos_efectivo_caja:,.2f} de dinero inicial real
+2. **Gastos pagados con dinero previo**: No con el efectivo de ventas del día
+3. **Fondo de caja no documentado**: Dinero de días anteriores o aporte externo
+
+**✅ ACCIONES RECOMENDADAS:**
+1. **Corregir dinero inicial**: Registrar ${dinero_final_caja + gastos_caja - ingresos_efectivo_caja:,.2f} como dinero inicial real
+2. **Verificar origen de gastos**: Confirmar si se pagaron con dinero externo al efectivo de ventas
+3. **Documentar fondo de caja**: Establecer procedimiento para registro de dinero inicial
+4. **Recalcular diferencias**: Con el dinero inicial corregido
+                """)
+                
+                # Mostrar cálculo corregido
+                dinero_inicial_estimado = dinero_final_caja + gastos_caja - ingresos_efectivo_caja
+                st.success(f"""
+**🧮 CÁLCULO CORREGIDO (si dinero inicial fuera ${dinero_inicial_estimado:,.2f}):**
+- Dinero inicial: ${dinero_inicial_estimado:,.2f}
+- + Ventas efectivo: ${ingresos_efectivo_caja:,.2f}
+- - Gastos: ${gastos_caja:,.2f}
+- = Esperado: ${dinero_inicial_estimado + ingresos_efectivo_caja - gastos_caja:,.2f}
+- = Real: ${dinero_final_caja:,.2f}
+- = **Diferencia: ${dinero_final_caja - (dinero_inicial_estimado + ingresos_efectivo_caja - gastos_caja):,.2f}** ✅
+                """)
+                
+                diagnosticos.append("💡 **Caso especial**: Dinero inicial probablemente mal registrado - Ver análisis detallado arriba")
+            
+            elif sobrante_significativo:
+                diagnosticos.append(f"💰 **Sobrante significativo**: ${diferencia_efectivo_real:,.2f} - Verificar dinero inicial y origen de fondos")
+            
+            if gastos_mayores_ventas:
+                deficit_efectivo = gastos_caja - ingresos_efectivo_caja
+                diagnosticos.append(f"⚠️ **Gastos > Ventas efectivo**: Déficit de ${deficit_efectivo:,.2f} - Verificar fuente de pago de gastos")
+
             # Mostrar diagnósticos
             if diagnosticos:
                 st.warning("**🔍 Puntos de atención detectados:**")
@@ -654,22 +724,58 @@ Diferencia:  ${ventas_transferencia_sistema - ingresos_transferencia_caja:,.2f}
             - No se requieren acciones adicionales
             """)
         elif diferencia_efectivo_real > 1:
-            st.info(f"""
-            💰 **SOBRANTE DE EFECTIVO**: +${diferencia_efectivo_real:,.2f}
+            # Análisis específico del tipo de sobrante
+            efectivo_negativo = efectivo_esperado < 0
+            sobrante_muy_grande = diferencia_efectivo_real > 1000
+            gastos_superan_ventas = corte.total_gastos > corte.ventas_efectivo
             
-            **Análisis detallado:**
-            - Dinero inicial: ${corte.dinero_inicial:,.2f}
-            - Ventas efectivo: ${corte.ventas_efectivo:,.2f}
-            - Gastos: ${corte.total_gastos:,.2f}
-            - Efectivo esperado: ${efectivo_esperado:,.2f}
-            - Efectivo real: ${dinero_final_caja:,.2f}
-            - Sobrante: ${diferencia_efectivo_real:,.2f}
-            
-            **Posibles causas:**
-            - Dinero inicial no registrado completamente
-            - Ventas en efectivo no registradas en el sistema
-            - Gastos pagados con dinero de otro origen
-            - Error en el conteo inicial
+            if efectivo_negativo and gastos_superan_ventas:
+                st.warning(f"""
+                🔍 **SOBRANTE DE EFECTIVO - CASO ESPECIAL**: +${diferencia_efectivo_real:,.2f}
+                
+                **📊 Situación Identificada:**
+                - Los gastos (${corte.total_gastos:,.2f}) superan las ventas en efectivo (${corte.ventas_efectivo:,.2f})
+                - Déficit teórico: ${corte.total_gastos - corte.ventas_efectivo:,.2f}
+                - Pero hay dinero físico real: ${dinero_final_caja:,.2f}
+                
+                **🎯 Explicación más probable:**
+                1. **DINERO INICIAL MAL REGISTRADO**: 
+                   - Registrado: ${corte.dinero_inicial:,.2f}
+                   - Probable real: ${dinero_final_caja + corte.total_gastos - corte.ventas_efectivo:,.2f}
+                
+                2. **GASTOS PAGADOS CON FONDO EXTERNO**:
+                   - Los gastos no se pagaron con el efectivo de ventas del día
+                   - Se usó dinero de días anteriores o aporte externo
+                
+                3. **FONDO DE CAJA NO DOCUMENTADO**:
+                   - Hay un fondo base que no se registra correctamente
+                
+                **✅ Acciones inmediatas recomendadas:**
+                1. **Verificar dinero inicial real** del día
+                2. **Documentar origen** del dinero físico presente
+                3. **Establecer protocolo** para registro de fondo de caja
+                4. **Corregir registro** si es necesario
+                
+                **🧮 Si el dinero inicial real fuera ${dinero_final_caja + corte.total_gastos - corte.ventas_efectivo:,.2f}:**
+                - Diferencia se reduciría a: ${dinero_final_caja - (dinero_final_caja + corte.total_gastos - corte.ventas_efectivo + corte.ventas_efectivo - corte.total_gastos):,.2f} ✅
+                """)
+            else:
+                st.info(f"""
+                💰 **SOBRANTE DE EFECTIVO**: +${diferencia_efectivo_real:,.2f}
+                
+                **Análisis detallado:**
+                - Dinero inicial: ${corte.dinero_inicial:,.2f}
+                - Ventas efectivo: ${corte.ventas_efectivo:,.2f}
+                - Gastos: ${corte.total_gastos:,.2f}
+                - Efectivo esperado: ${efectivo_esperado:,.2f}
+                - Efectivo real: ${dinero_final_caja:,.2f}
+                - Sobrante: ${diferencia_efectivo_real:,.2f}
+                
+                **Posibles causas:**
+                - Dinero inicial no registrado completamente
+                - Ventas en efectivo no registradas en el sistema
+                - Gastos pagados con dinero de otro origen
+                - Error en el conteo inicial
             
             **Acciones recomendadas:**
             - Verificar si había más dinero inicial
