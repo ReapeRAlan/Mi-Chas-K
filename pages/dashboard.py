@@ -252,6 +252,12 @@ def mostrar_comparacion_detallada(fecha: str):
     
     # DEBUG: Mostrar información de ventas del sistema
     with st.expander("🔍 DEBUG: Ventas del Sistema"):
+        st.write(f"**Total ventas sistema:** ${total_ventas_sistema}")
+        st.write(f"**Efectivo sistema:** ${ventas_efectivo_sistema}")
+        st.write(f"**Tarjeta sistema:** ${ventas_tarjeta_sistema}")
+        st.write(f"**Transferencia sistema:** ${ventas_transferencia_sistema}")
+        st.write(f"**Gastos sistema:** ${total_gastos_sistema}")
+        st.write("---")
         for i, venta in enumerate(ventas[:5]):  # Solo primeras 5
             st.write(f"**Venta {i+1}:** ${venta.total} - {venta.metodo_pago}")
         if len(ventas) > 5:
@@ -277,29 +283,57 @@ def mostrar_comparacion_detallada(fecha: str):
     if corte:
         dinero_inicial_caja = corte.dinero_inicial
         ingresos_efectivo_caja = corte.ventas_efectivo  # Lo que realmente ingresó en efectivo
-        ingresos_tarjeta_caja = corte.ventas_tarjeta    # Lo que realmente se cobró en tarjeta
-        ingresos_transferencia_caja = getattr(corte, 'ventas_transferencia', 0)
         gastos_caja = corte.total_gastos                # Lo que realmente se gastó
         dinero_final_caja = corte.dinero_final          # Lo que quedó físicamente
         
-        # CORRECCIÓN: Si ventas_transferencia no existe en el corte, calcularlo
-        # como la diferencia entre el total y efectivo + tarjeta
-        if not hasattr(corte, 'ventas_transferencia') or ingresos_transferencia_caja == 0:
-            # Si el campo no existe, asumir que las transferencias van como "tarjeta" en el corte
-            # y redistribuir correctamente
-            total_sistema_sin_efectivo = total_ventas_sistema - ventas_efectivo_sistema
-            if total_sistema_sin_efectivo > 0 and ventas_transferencia_sistema > 0:
-                # Redistribuir: lo que está en corte.ventas_tarjeta puede incluir transferencias
-                ingresos_transferencia_caja = ventas_transferencia_sistema  # Usar el del sistema
-                ingresos_tarjeta_caja = corte.ventas_tarjeta - ventas_transferencia_sistema
-                if ingresos_tarjeta_caja < 0:
-                    ingresos_tarjeta_caja = 0
+        # CORRECCIÓN CRÍTICA: El corte no distingue tarjeta vs transferencia
+        # En el corte, "ventas_tarjeta" incluye tanto tarjetas como transferencias
+        # Vamos a separar basándose en los datos del sistema
+        total_no_efectivo_sistema = ventas_tarjeta_sistema + ventas_transferencia_sistema
+        total_no_efectivo_corte = corte.ventas_tarjeta
         
-        # Cálculo de la caja: Inicial + Ingresos - Gastos = Final esperado
+        if total_no_efectivo_sistema > 0:
+            # Distribuir proporcionalmente
+            ratio_tarjeta = ventas_tarjeta_sistema / total_no_efectivo_sistema
+            ratio_transferencia = ventas_transferencia_sistema / total_no_efectivo_sistema
+            
+            ingresos_tarjeta_caja = total_no_efectivo_corte * ratio_tarjeta
+            ingresos_transferencia_caja = total_no_efectivo_corte * ratio_transferencia
+        else:
+            ingresos_tarjeta_caja = corte.ventas_tarjeta
+            ingresos_transferencia_caja = 0
+        
+        # Totales de la caja física
         total_ingresos_caja = ingresos_efectivo_caja + ingresos_tarjeta_caja + ingresos_transferencia_caja
+        
+        # CORRECCIÓN: El dinero final debe calcularse como:
+        # Inicial + Efectivo_recibido - Gastos_pagados = Final_esperado
         dinero_final_calculado = dinero_inicial_caja + ingresos_efectivo_caja - gastos_caja
         diferencia_caja_interna = dinero_final_caja - dinero_final_calculado
+        
+        # La ganancia de la caja es la diferencia entre todos los ingresos y gastos
         ganancia_caja = total_ingresos_caja - gastos_caja
+        
+        # DEBUG: Mostrar cálculos de la caja física
+        with st.expander("🔍 DEBUG: Cálculos Caja Física Detallados"):
+            st.write(f"**Total no-efectivo sistema:** ${ventas_tarjeta_sistema + ventas_transferencia_sistema:.2f}")
+            st.write(f"**Total no-efectivo corte:** ${corte.ventas_tarjeta:.2f}")
+            if total_no_efectivo_sistema > 0:
+                st.write(f"**Ratio tarjeta:** {ratio_tarjeta:.2f}")
+                st.write(f"**Ratio transferencia:** {ratio_transferencia:.2f}")
+                st.write(f"**Tarjeta caja calculada:** ${ingresos_tarjeta_caja:.2f}")
+                st.write(f"**Transferencia caja calculada:** ${ingresos_transferencia_caja:.2f}")
+            st.write("---")
+            st.write(f"**Cálculo dinero final:**")
+            st.write(f"  Inicial: ${dinero_inicial_caja:.2f}")
+            st.write(f"  + Efectivo: ${ingresos_efectivo_caja:.2f}")
+            st.write(f"  - Gastos: ${gastos_caja:.2f}")
+            st.write(f"  = Esperado: ${dinero_final_calculado:.2f}")
+            st.write(f"**Dinero final real:** ${dinero_final_caja:.2f}")
+            st.write(f"**Diferencia interna:** ${diferencia_caja_interna:.2f}")
+            st.write("---")
+            st.write(f"**Total ingresos caja:** ${total_ingresos_caja:.2f}")
+            st.write(f"**Ganancia caja:** ${ganancia_caja:.2f}")
     else:
         dinero_inicial_caja = 0
         ingresos_efectivo_caja = 0
