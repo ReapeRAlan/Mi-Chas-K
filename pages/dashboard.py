@@ -240,16 +240,6 @@ def mostrar_comparacion_detallada(fecha: str):
     gastos = GastoDiario.get_by_fecha(fecha)
     corte = CorteCaja.get_by_fecha(fecha)
     
-    # DEBUG: Mostrar información del corte
-    if corte:
-        with st.expander("🔍 DEBUG: Datos del Corte"):
-            st.write(f"**Dinero inicial:** ${corte.dinero_inicial}")
-            st.write(f"**Ventas efectivo:** ${corte.ventas_efectivo}")
-            st.write(f"**Ventas tarjeta:** ${corte.ventas_tarjeta}")
-            st.write(f"**Ventas transferencia:** ${getattr(corte, 'ventas_transferencia', 'NO EXISTE')}")
-            st.write(f"**Total gastos:** ${corte.total_gastos}")
-            st.write(f"**Dinero final:** ${corte.dinero_final}")
-    
     if not ventas and not gastos and not corte:
         st.info("📊 No hay datos registrados para esta fecha")
         return
@@ -264,19 +254,6 @@ def mostrar_comparacion_detallada(fecha: str):
     total_gastos_sistema = sum(g.monto for g in gastos)
     ganancia_sistema = total_ventas_sistema - total_gastos_sistema
     
-    # DEBUG: Mostrar información de ventas del sistema
-    with st.expander("🔍 DEBUG: Ventas del Sistema"):
-        st.write(f"**Total ventas sistema:** ${total_ventas_sistema}")
-        st.write(f"**Efectivo sistema:** ${ventas_efectivo_sistema}")
-        st.write(f"**Tarjeta sistema:** ${ventas_tarjeta_sistema}")
-        st.write(f"**Transferencia sistema:** ${ventas_transferencia_sistema}")
-        st.write(f"**Gastos sistema:** ${total_gastos_sistema}")
-        st.write("---")
-        for i, venta in enumerate(ventas[:5]):  # Solo primeras 5
-            st.write(f"**Venta {i+1}:** ${venta.total} - {venta.metodo_pago}")
-        if len(ventas) > 5:
-            st.write(f"... y {len(ventas) - 5} ventas más")
-    
     # =================================================================
     # CÁLCULOS DE CAJA FÍSICA (LADO B)
     # =================================================================
@@ -284,7 +261,7 @@ def mostrar_comparacion_detallada(fecha: str):
         dinero_inicial_caja = corte.dinero_inicial
         ingresos_efectivo_caja = corte.ventas_efectivo  # Lo que realmente ingresó en efectivo
         gastos_caja = corte.total_gastos                # Lo que realmente se gastó
-        dinero_final_caja = corte.dinero_final          # Lo que quedó físicamente
+        dinero_final_caja = corte.dinero_final          # TOTAL FÍSICO SIN DESCONTAR NADA
         
         # CORRECCIÓN CRÍTICA: El corte no distingue tarjeta vs transferencia
         # En el corte, "ventas_tarjeta" incluye tanto tarjetas como transferencias
@@ -306,35 +283,44 @@ def mostrar_comparacion_detallada(fecha: str):
         # Totales de la caja física
         total_ingresos_caja = ingresos_efectivo_caja + ingresos_tarjeta_caja + ingresos_transferencia_caja
         
-        # CORRECCIÓN: El dinero final debe calcularse como:
-        # Inicial + Efectivo_recibido - Gastos_pagados = Final_esperado
-        dinero_final_calculado = dinero_inicial_caja + ingresos_efectivo_caja - gastos_caja
-        diferencia_caja_interna = dinero_final_caja - dinero_final_calculado
+        # CORRECCIÓN FUNDAMENTAL: El dinero final es el total físico
+        # Para comparar con el sistema, necesitamos calcular el "neto" de la caja:
+        # Dinero final - gastos pagados = dinero neto disponible
+        dinero_neto_caja = dinero_final_caja - gastos_caja
+        
+        # La diferencia real es comparar el dinero neto con lo que debería haber:
+        # Lo que debería haber = inicial + ingresos efectivo
+        dinero_esperado_neto = dinero_inicial_caja + ingresos_efectivo_caja
+        diferencia_caja_interna = dinero_neto_caja - dinero_esperado_neto
         
         # La ganancia de la caja es la diferencia entre todos los ingresos y gastos
         ganancia_caja = total_ingresos_caja - gastos_caja
         
-        # DEBUG: Mostrar cálculos de la caja física
-        with st.expander("🔍 DEBUG: Cálculos Caja Física Detallados"):
-            st.write(f"**Total no-efectivo sistema:** ${ventas_tarjeta_sistema + ventas_transferencia_sistema:.2f}")
-            st.write(f"**Total no-efectivo corte:** ${corte.ventas_tarjeta:.2f}")
+        # DEBUG: Mostrar cálculos de la caja física con nueva lógica
+        with st.expander("🔍 DEBUG: Cálculos Caja Física - NUEVA LÓGICA"):
+            st.write(f"**Distribución no-efectivo:**")
+            st.write(f"  Total no-efectivo sistema: ${ventas_tarjeta_sistema + ventas_transferencia_sistema:.2f}")
+            st.write(f"  Total no-efectivo corte: ${corte.ventas_tarjeta:.2f}")
             if total_no_efectivo_sistema > 0:
-                st.write(f"**Ratio tarjeta:** {ratio_tarjeta:.2f}")
-                st.write(f"**Ratio transferencia:** {ratio_transferencia:.2f}")
-                st.write(f"**Tarjeta caja calculada:** ${ingresos_tarjeta_caja:.2f}")
-                st.write(f"**Transferencia caja calculada:** ${ingresos_transferencia_caja:.2f}")
+                st.write(f"  Ratio tarjeta: {ratio_tarjeta:.2f}")
+                st.write(f"  Ratio transferencia: {ratio_transferencia:.2f}")
+                st.write(f"  Tarjeta caja: ${ingresos_tarjeta_caja:.2f}")
+                st.write(f"  Transferencia caja: ${ingresos_transferencia_caja:.2f}")
             st.write("---")
-            st.write(f"**Cálculo dinero final:**")
+            st.write(f"**NUEVA LÓGICA - Dinero final como total físico:**")
+            st.write(f"  💵 Dinero final físico: ${dinero_final_caja:.2f} (SIN descontar gastos)")
+            st.write(f"  ➖ Gastos pagados: ${gastos_caja:.2f}")
+            st.write(f"  📊 Dinero neto disponible: ${dinero_neto_caja:.2f}")
+            st.write("---")
+            st.write(f"**Comparación con lo esperado:**")
             st.write(f"  Inicial: ${dinero_inicial_caja:.2f}")
             st.write(f"  + Efectivo: ${ingresos_efectivo_caja:.2f}")
-            st.write(f"  - Gastos: ${gastos_caja:.2f}")
-            st.write(f"  = Esperado: ${dinero_final_calculado:.2f}")
-            st.write(f"**Dinero final real:** ${dinero_final_caja:.2f}")
-            st.write(f"**Diferencia interna:** ${diferencia_caja_interna:.2f}")
-            st.write("---")
-            st.write(f"**Total ingresos caja:** ${total_ingresos_caja:.2f}")
-            st.write(f"**Ganancia caja:** ${ganancia_caja:.2f}")
+            st.write(f"  = Esperado neto: ${dinero_esperado_neto:.2f}")
+            st.write(f"  Real neto: ${dinero_neto_caja:.2f}")
+            st.write(f"  🔍 Diferencia: ${diferencia_caja_interna:.2f}")
+    
     else:
+        # Variables por defecto cuando no hay corte
         dinero_inicial_caja = 0
         ingresos_efectivo_caja = 0
         ingresos_tarjeta_caja = 0
@@ -342,7 +328,8 @@ def mostrar_comparacion_detallada(fecha: str):
         gastos_caja = 0
         dinero_final_caja = 0
         total_ingresos_caja = 0
-        dinero_final_calculado = 0
+        dinero_neto_caja = 0
+        dinero_esperado_neto = 0
         diferencia_caja_interna = 0
         ganancia_caja = 0
     
@@ -396,12 +383,6 @@ def mostrar_comparacion_detallada(fecha: str):
                 st.metric("Tarjeta", f"${ingresos_tarjeta_caja:,.2f}")
                 st.metric("Gastos", f"${gastos_caja:,.2f}")
             
-            # DEBUG TEMPORAL: Mostrar qué variables se están usando
-            st.text(f"DEBUG UI - Efectivo: ${ingresos_efectivo_caja:.2f}")
-            st.text(f"DEBUG UI - Tarjeta: ${ingresos_tarjeta_caja:.2f}")
-            st.text(f"DEBUG UI - Transferencia: ${ingresos_transferencia_caja:.2f}")
-            st.text(f"🔍 VERIFICACIÓN: ¿Son diferentes a sistema? E:{ingresos_efectivo_caja != ventas_efectivo_sistema}, T:{ingresos_tarjeta_caja != ventas_tarjeta_sistema}, Tr:{ingresos_transferencia_caja != ventas_transferencia_sistema}")
-            
             # Ganancia de la caja
             delta_ganancia_caja = ganancia_caja if ganancia_caja != 0 else None
             st.metric("🎯 Ganancia Real", f"${ganancia_caja:,.2f}", 
@@ -409,20 +390,19 @@ def mostrar_comparacion_detallada(fecha: str):
             
             # Estado de la caja física
             st.markdown("**💰 Estado de Caja:**")
-            st.text(f"Inicial:   ${dinero_inicial_caja:,.2f}")
-            st.text(f"Efectivo: +${ingresos_efectivo_caja:,.2f}")
-            st.text(f"Gastos:   -${gastos_caja:,.2f}")
-            st.text(f"Esperado:  ${dinero_final_calculado:,.2f}")
-            st.text(f"Real:      ${dinero_final_caja:,.2f}")
+            st.text(f"Final físico: ${dinero_final_caja:,.2f}")
+            st.text(f"Gastos:      -${gastos_caja:,.2f}")
+            st.text(f"Neto:         ${dinero_neto_caja:,.2f}")
+            st.text(f"Esperado:     ${dinero_esperado_neto:,.2f}")
             
             # Verificación interna de caja con explicación clara
             if abs(diferencia_caja_interna) > 0.5:
                 if diferencia_caja_interna > 0:
-                    st.success(f"💰 Sobrante: ${diferencia_caja_interna:,.2f}")
-                    st.info("Hay más dinero del esperado. Posibles causas: dinero inicial no registrado, ventas no contabilizadas, gastos no pagados.")
+                    st.success(f"💰 Sobrante neto: ${diferencia_caja_interna:,.2f}")
+                    st.info("Hay más dinero neto del esperado. Posibles causas: dinero inicial no registrado, ventas efectivo adicionales.")
                 else:
-                    st.error(f"💸 Faltante: ${abs(diferencia_caja_interna):,.2f}")
-                    st.warning("Hay menos dinero del esperado. Revisar si hay gastos adicionales o dinero retirado.")
+                    st.error(f"💸 Faltante neto: ${abs(diferencia_caja_interna):,.2f}")
+                    st.warning("Hay menos dinero neto del esperado. Revisar si hay efectivo faltante o gastos no contabilizados.")
             else:
                 st.success("✅ Caja cuadrada perfectamente")
         else:
@@ -446,11 +426,6 @@ def mostrar_comparacion_detallada(fecha: str):
             diff_efectivo = ingresos_efectivo_caja - ventas_efectivo_sistema
             diff_tarjeta = ingresos_tarjeta_caja - ventas_tarjeta_sistema
             diff_transferencia = ingresos_transferencia_caja - ventas_transferencia_sistema
-            
-            # DEBUG TEMPORAL: Mostrar cálculos de diferencias
-            st.text(f"DEBUG DIFF - Efectivo: {ingresos_efectivo_caja:.2f} - {ventas_efectivo_sistema:.2f} = {diff_efectivo:.2f}")
-            st.text(f"DEBUG DIFF - Tarjeta: {ingresos_tarjeta_caja:.2f} - {ventas_tarjeta_sistema:.2f} = {diff_tarjeta:.2f}")
-            st.text(f"DEBUG DIFF - Transfer: {ingresos_transferencia_caja:.2f} - {ventas_transferencia_sistema:.2f} = {diff_transferencia:.2f}")
             
             st.metric("Efectivo", f"${diff_efectivo:,.2f}", 
                      delta=diff_efectivo if diff_efectivo != 0 else None,
