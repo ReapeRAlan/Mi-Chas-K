@@ -266,8 +266,77 @@ class ReporteGenerator:
     def __init__(self):
         self.page_size = A4
         
+    def _crear_estilos_personalizados(self):
+        """Crear estilos personalizados para el reporte"""
+        styles = getSampleStyleSheet()
+        
+        # Estilo para títulos de sección
+        styles.add(ParagraphStyle(
+            name='SeccionTitulo',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.darkblue,
+            spaceAfter=10,
+            spaceBefore=15,
+            leftIndent=0
+        ))
+        
+        # Estilo para subtítulos
+        styles.add(ParagraphStyle(
+            name='Subtitulo',
+            parent=styles['Normal'],
+            fontSize=11,
+            textColor=colors.darkgreen,
+            fontName='Helvetica-Bold'
+        ))
+        
+        # Estilo para métricas importantes
+        styles.add(ParagraphStyle(
+            name='Metrica',
+            parent=styles['Normal'],
+            fontSize=12,
+            fontName='Helvetica-Bold',
+            alignment=TA_CENTER
+        ))
+        
+        # Estilo para fórmulas
+        styles.add(ParagraphStyle(
+            name='Formula',
+            parent=styles['Normal'],
+            fontSize=10,
+            fontName='Courier',
+            backColor=colors.lightgrey,
+            leftIndent=20,
+            rightIndent=20,
+            spaceBefore=5,
+            spaceAfter=5
+        ))
+        
+        return styles
+    
+    def _crear_tabla_metrica(self, datos, titulo="", colores_fondo=None):
+        """Crear una tabla estilizada para métricas"""
+        if colores_fondo is None:
+            colores_fondo = [colors.lightblue, colors.lightcoral]
+        
+        tabla = Table(datos, colWidths=[80*mm, 60*mm])
+        
+        estilo = [
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 11),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('BACKGROUND', (0, 0), (0, -1), colores_fondo[0]),
+            ('BACKGROUND', (1, 0), (1, -1), colores_fondo[1])
+        ]
+        
+        tabla.setStyle(TableStyle(estilo))
+        return tabla
+    
     def generar_reporte_diario(self, fecha: str) -> bytes:
-        """Genera un reporte completo del día en PDF"""
+        """Genera un reporte completo del día en PDF con el mismo nivel de detalle que el dashboard"""
         buffer = io.BytesIO()
         
         doc = SimpleDocTemplate(
@@ -275,111 +344,218 @@ class ReporteGenerator:
             pagesize=self.page_size,
             leftMargin=20*mm,
             rightMargin=20*mm,
-            topMargin=20*mm,
-            bottomMargin=20*mm
+            topMargin=15*mm,
+            bottomMargin=15*mm
         )
         
         story = []
-        styles = getSampleStyleSheet()
+        styles = self._crear_estilos_personalizados()
         
-        # Título del reporte
-        titulo = f"REPORTE DIARIO - {fecha}"
-        story.append(Paragraph(titulo, styles['Title']))
+        # ===============================================================
+        # ENCABEZADO PRINCIPAL
+        # ===============================================================
+        titulo_principal = f"<b>📊 REPORTE CONTABLE DIARIO</b><br/>Mi Chas-K - {fecha}"
+        story.append(Paragraph(titulo_principal, styles['Title']))
+        story.append(Spacer(1, 15))
+        
+        # Fecha de generación
+        fecha_generacion = get_mexico_datetime().strftime("%d/%m/%Y %H:%M:%S")
+        story.append(Paragraph(f"<i>Generado el: {fecha_generacion}</i>", styles['Normal']))
         story.append(Spacer(1, 20))
         
-        # Información general
+        # ===============================================================
+        # OBTENER DATOS DEL DÍA
+        # ===============================================================
         from database.models import Venta, GastoDiario, CorteCaja
         
-        # Obtener datos del día
         ventas = Venta.get_by_fecha(fecha, fecha)
         gastos = GastoDiario.get_by_fecha(fecha)
         corte = CorteCaja.get_by_fecha(fecha)
         
-        # Resumen ejecutivo
-        story.append(Paragraph("📊 RESUMEN EJECUTIVO", styles['Heading2']))
+        # ===============================================================
+        # SECCIÓN 1: ANÁLISIS CONTABLE PRINCIPAL
+        # ===============================================================
+        story.append(Paragraph("🧮 ANÁLISIS CONTABLE PRINCIPAL", styles['SeccionTitulo']))
         
-        total_ventas = sum(v.total for v in ventas)
-        total_gastos = sum(g.monto for g in gastos)
-        ganancia = total_ventas - total_gastos
+        # Cálculos principales
+        total_ventas_sistema = sum(v.total for v in ventas)
+        total_gastos_sistema = sum(g.monto for g in gastos)
         
-        datos_resumen = [
-            ['Concepto', 'Cantidad', 'Monto'],
-            ['Ventas del día', f"{len(ventas)} ventas", f"${total_ventas:,.2f}"],
-            ['Gastos del día', f"{len(gastos)} gastos", f"${total_gastos:,.2f}"],
-            ['Ganancia bruta', '', f"${ganancia:,.2f}"],
+        if corte:
+            # Aplicar la misma lógica corregida del dashboard
+            dinero_inicial = corte.dinero_inicial
+            dinero_final = corte.dinero_final
+            
+            # LÓGICA CONTABLE CORRECTA
+            resultado_sistema = total_ventas_sistema - total_gastos_sistema
+            incremento_caja = dinero_final - dinero_inicial
+            resultado_caja = incremento_caja - total_gastos_sistema
+            diferencia_correcta = resultado_sistema - resultado_caja
+            diferencia_registrada = corte.diferencia
+            discrepancia = abs(diferencia_correcta - diferencia_registrada)
+            
+            # Tabla de comparación lado a lado (como en el dashboard)
+            datos_comparacion = [
+                ['📊 LADO SISTEMA', '💵 LADO CAJA FÍSICA'],
+                ['Lo que debería haber según las operaciones', 'Lo que realmente pasó con el dinero'],
+                ['', ''],
+                [f'💰 Ingresos Totales: ${total_ventas_sistema:,.2f}', f'🌅 Dinero Inicial: ${dinero_inicial:,.2f}'],
+                [f'💸 Gastos Totales: ${total_gastos_sistema:,.2f}', f'🌇 Dinero Final: ${dinero_final:,.2f}'],
+                [f'📈 Resultado Sistema: ${resultado_sistema:,.2f}', f'📉 Resultado Caja: ${resultado_caja:,.2f}'],
+            ]
+            
+            tabla_comparacion = Table(datos_comparacion, colWidths=[90*mm, 90*mm])
+            tabla_comparacion.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTNAME', (0, 0), (-1, 1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 1), 12),
+                ('FONTSIZE', (0, 2), (-1, -1), 10),
+                ('BACKGROUND', (0, 0), (0, -1), colors.lightblue),
+                ('BACKGROUND', (1, 0), (1, -1), colors.lightgreen),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('BACKGROUND', (0, 3), (-1, -1), colors.beige)
+            ]))
+            
+            story.append(tabla_comparacion)
+            story.append(Spacer(1, 15))
+            
+            # ===============================================================
+            # ANÁLISIS DE LA DIFERENCIA
+            # ===============================================================
+            story.append(Paragraph("⚖️ ANÁLISIS DE LA DIFERENCIA", styles['SeccionTitulo']))
+            
+            datos_diferencia = [
+                ['🧮 Diferencia Calculada', f'${diferencia_correcta:,.2f}'],
+                ['📝 Diferencia Registrada', f'${diferencia_registrada:,.2f}'],
+                ['⚠️ Discrepancia', f'${discrepancia:,.2f}']
+            ]
+            
+            if abs(diferencia_correcta) < 0.01:
+                interpretacion = "✅ CAJA PERFECTA: El dinero físico coincide exactamente con lo esperado"
+                color_interpretacion = colors.green
+            elif diferencia_correcta > 0:
+                interpretacion = f"⚠️ FALTA DINERO: Según el sistema debería haber ${abs(diferencia_correcta):,.2f} más en la caja"
+                color_interpretacion = colors.orange
+            else:
+                interpretacion = f"💰 SOBRA DINERO: Hay ${abs(diferencia_correcta):,.2f} más de lo esperado en la caja"
+                color_interpretacion = colors.lightblue
+            
+            datos_diferencia.append(['📊 Interpretación', interpretacion])
+            
+            if discrepancia >= 0.01:
+                estado_registro = f"❌ ERROR EN EL REGISTRO: Discrepancia de ${discrepancia:,.2f}"
+                color_registro = colors.red
+            else:
+                estado_registro = "✅ REGISTRO CORRECTO: La diferencia registrada coincide con el cálculo"
+                color_registro = colors.green
+            
+            datos_diferencia.append(['📋 Estado del Registro', estado_registro])
+            
+            tabla_diferencia = self._crear_tabla_metrica(datos_diferencia)
+            story.append(tabla_diferencia)
+            story.append(Spacer(1, 15))
+            
+            # ===============================================================
+            # FÓRMULAS DE CÁLCULO (como en el dashboard)
+            # ===============================================================
+            story.append(Paragraph("🧮 FÓRMULAS DE CÁLCULO", styles['SeccionTitulo']))
+            
+            formula_texto = f"""
+LADO SISTEMA:
+Resultado = Ingresos - Gastos
+         = ${total_ventas_sistema:,.2f} - ${total_gastos_sistema:,.2f}
+         = ${resultado_sistema:,.2f}
+
+LADO CAJA:
+Incremento = Dinero Final - Dinero Inicial
+          = ${dinero_final:,.2f} - ${dinero_inicial:,.2f}
+          = ${incremento_caja:,.2f}
+
+Resultado = Incremento - Gastos
+         = ${incremento_caja:,.2f} - ${total_gastos_sistema:,.2f}
+         = ${resultado_caja:,.2f}
+
+DIFERENCIA:
+Diferencia = Sistema - Caja
+          = ${resultado_sistema:,.2f} - ${resultado_caja:,.2f}
+          = ${diferencia_correcta:,.2f}
+            """
+            
+            story.append(Paragraph(formula_texto, styles['Formula']))
+            story.append(Spacer(1, 20))
+        
+        else:
+            story.append(Paragraph("⚠️ No hay corte de caja registrado para esta fecha", styles['Normal']))
+            story.append(Spacer(1, 15))
+        
+        # ===============================================================
+        # SECCIÓN 2: DESGLOSE POR MÉTODO DE PAGO
+        # ===============================================================
+        story.append(Paragraph("💳 DESGLOSE POR MÉTODO DE PAGO", styles['SeccionTitulo']))
+        
+        # Calcular ventas por método desde el sistema
+        ventas_efectivo_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'efectivo')
+        ventas_tarjeta_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'tarjeta')
+        ventas_transferencia_sistema = sum(v.total for v in ventas if v.metodo_pago.lower() == 'transferencia')
+        
+        datos_metodos = [
+            ['MÉTODO DE PAGO', 'SISTEMA', 'CORTE', 'DIFERENCIA'],
+            ['💵 Efectivo', f'${ventas_efectivo_sistema:,.2f}', 
+             f'${corte.ventas_efectivo:,.2f}' if corte else 'N/A',
+             f'${(corte.ventas_efectivo - ventas_efectivo_sistema):,.2f}' if corte else 'N/A'],
+            ['💳 Tarjeta', f'${ventas_tarjeta_sistema:,.2f}',
+             f'${corte.ventas_tarjeta * (ventas_tarjeta_sistema / (ventas_tarjeta_sistema + ventas_transferencia_sistema)) if (ventas_tarjeta_sistema + ventas_transferencia_sistema) > 0 else corte.ventas_tarjeta:,.2f}' if corte else 'N/A',
+             'Ver análisis técnico'],
+            ['📱 Transferencia', f'${ventas_transferencia_sistema:,.2f}',
+             'Incluido en Tarjeta/Transf',
+             'Ver análisis técnico'],
+            ['📊 TOTAL', f'${total_ventas_sistema:,.2f}',
+             f'${(corte.ventas_efectivo + corte.ventas_tarjeta):,.2f}' if corte else 'N/A',
+             f'${((corte.ventas_efectivo + corte.ventas_tarjeta) - total_ventas_sistema):,.2f}' if corte else 'N/A']
         ]
         
-        tabla_resumen = Table(datos_resumen, colWidths=[60*mm, 40*mm, 40*mm])
-        tabla_resumen.setStyle(TableStyle([
+        tabla_metodos = Table(datos_metodos, colWidths=[45*mm, 35*mm, 35*mm, 35*mm])
+        tabla_metodos.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('FONTSIZE', (0, 1), (-1, -1), 10),
+            ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.lightblue),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         
-        story.append(tabla_resumen)
+        story.append(tabla_metodos)
         story.append(Spacer(1, 20))
         
-        # Análisis de caja vs ventas
-        story.append(Paragraph("💰 ANÁLISIS CAJA VS VENTAS", styles['Heading2']))
+        # ===============================================================
+        # SECCIÓN 3: RESUMEN DE TRANSACCIONES
+        # ===============================================================
+        story.append(Paragraph("📋 RESUMEN DE TRANSACCIONES", styles['SeccionTitulo']))
         
-        if corte:
-            ventas_efectivo = sum(v.total for v in ventas if v.metodo_pago == 'efectivo')
-            ventas_tarjeta = sum(v.total for v in ventas if v.metodo_pago == 'tarjeta')
-            
-            datos_analisis = [
-                ['Concepto', 'Registrado', 'Real', 'Diferencia'],
-                ['Dinero inicial', '', f"${corte.dinero_inicial:,.2f}", ''],
-                ['Ventas efectivo', f"${ventas_efectivo:,.2f}", f"${corte.ventas_efectivo:,.2f}", f"${corte.ventas_efectivo - ventas_efectivo:,.2f}"],
-                ['Ventas tarjeta', f"${ventas_tarjeta:,.2f}", f"${corte.ventas_tarjeta:,.2f}", f"${corte.ventas_tarjeta - ventas_tarjeta:,.2f}"],
-                ['Gastos', f"${total_gastos:,.2f}", f"${corte.total_gastos:,.2f}", f"${corte.total_gastos - total_gastos:,.2f}"],
-                ['Dinero final', '', f"${corte.dinero_final:,.2f}", ''],
-            ]
-            
-            # Calcular diferencia total
-            esperado = corte.dinero_inicial + corte.ventas_efectivo - corte.total_gastos
-            diferencia_total = corte.dinero_final - esperado
-            datos_analisis.append(['DIFERENCIA TOTAL', '', '', f"${diferencia_total:,.2f}"])
-            
-            tabla_analisis = Table(datos_analisis, colWidths=[50*mm, 35*mm, 35*mm, 35*mm])
-            tabla_analisis.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BACKGROUND', (0, 1), (-1, -2), colors.beige),
-                ('BACKGROUND', (0, -1), (-1, -1), colors.yellow),
-                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
-            ]))
-            
-            story.append(tabla_analisis)
-        else:
-            story.append(Paragraph("⚠️ No se encontró corte de caja para este día", styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        
-        # Detalle de ventas
+        # Ventas del día
         if ventas:
-            story.append(Paragraph("🛒 DETALLE DE VENTAS", styles['Heading2']))
+            story.append(Paragraph("💰 VENTAS DEL DÍA", styles['Subtitulo']))
             
-            datos_ventas = [['#', 'Hora', 'Vendedor', 'Método', 'Total']]
-            for i, venta in enumerate(ventas, 1):
-                hora = venta.fecha.strftime("%H:%M")
+            datos_ventas = [['#', 'Hora', 'Método Pago', 'Vendedor', 'Total']]
+            for i, v in enumerate(ventas[:15], 1):  # Mostrar máximo 15 ventas
+                hora = v.fecha.strftime('%H:%M') if v.fecha else 'N/A'
                 datos_ventas.append([
                     str(i),
                     hora,
-                    venta.vendedor or "N/A",
-                    venta.metodo_pago.upper(),
-                    f"${venta.total:,.2f}"
+                    v.metodo_pago or 'N/A',
+                    v.vendedor or 'N/A',
+                    f'${v.total:.2f}'
                 ])
             
-            tabla_ventas = Table(datos_ventas, colWidths=[15*mm, 25*mm, 40*mm, 30*mm, 30*mm])
+            if len(ventas) > 15:
+                datos_ventas.append(['...', '...', '...', '...', f'... y {len(ventas) - 15} más'])
+            
+            tabla_ventas = Table(datos_ventas, colWidths=[15*mm, 25*mm, 30*mm, 40*mm, 25*mm])
             tabla_ventas.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -391,22 +567,23 @@ class ReporteGenerator:
             ]))
             
             story.append(tabla_ventas)
-            story.append(Spacer(1, 20))
+            story.append(Spacer(1, 15))
         
-        # Detalle de gastos
+        # Gastos del día
         if gastos:
-            story.append(Paragraph("💸 DETALLE DE GASTOS", styles['Heading2']))
+            story.append(Paragraph("💸 GASTOS DEL DÍA", styles['Subtitulo']))
             
             datos_gastos = [['Concepto', 'Categoría', 'Monto', 'Vendedor']]
-            for gasto in gastos:
+            for g in gastos:
+                concepto = g.concepto[:25] + "..." if len(g.concepto) > 25 else g.concepto
                 datos_gastos.append([
-                    gasto.concepto[:30] + "..." if len(gasto.concepto) > 30 else gasto.concepto,
-                    gasto.categoria,
-                    f"${gasto.monto:,.2f}",
-                    gasto.vendedor or "N/A"
+                    concepto,
+                    g.categoria or 'N/A',
+                    f'${g.monto:.2f}',
+                    g.vendedor or 'N/A'
                 ])
             
-            tabla_gastos = Table(datos_gastos, colWidths=[50*mm, 30*mm, 30*mm, 30*mm])
+            tabla_gastos = Table(datos_gastos, colWidths=[50*mm, 30*mm, 25*mm, 30*mm])
             tabla_gastos.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -418,6 +595,44 @@ class ReporteGenerator:
             ]))
             
             story.append(tabla_gastos)
+            story.append(Spacer(1, 20))
+        
+        # ===============================================================
+        # SECCIÓN 4: MÉTRICAS DE CALIDAD
+        # ===============================================================
+        if corte:
+            story.append(Paragraph("📊 MÉTRICAS DE CALIDAD", styles['SeccionTitulo']))
+            
+            # Calcular métricas como en el dashboard
+            efectivo_esperado = dinero_inicial + corte.ventas_efectivo - total_gastos_sistema
+            diferencia_efectivo_real = dinero_final - efectivo_esperado
+            
+            exactitud_efectivo = 100 - (abs(diferencia_efectivo_real) / efectivo_esperado * 100) if efectivo_esperado > 0 else 0
+            exactitud_total = 100 - (abs((corte.ventas_efectivo + corte.ventas_tarjeta) - total_ventas_sistema) / total_ventas_sistema * 100) if total_ventas_sistema > 0 else 0
+            
+            diferencias_criticas = sum(1 for d in [abs(diferencia_correcta), abs(discrepancia)] if d > 10)
+            estado_general = "🟢 EXCELENTE" if diferencias_criticas == 0 else "🟡 REVISAR" if diferencias_criticas <= 1 else "🔴 CRÍTICO"
+            
+            datos_metricas = [
+                ['🎯 Exactitud Efectivo', f'{max(0, exactitud_efectivo):.1f}%'],
+                ['📊 Exactitud Total', f'{max(0, exactitud_total):.1f}%'],
+                ['⚖️ Estado General', estado_general],
+                ['🔍 Diferencias Críticas', f'{diferencias_criticas} detectadas'],
+                ['💰 Control Financiero', 'EXCELENTE' if abs(diferencia_correcta) <= 1 else 'REVISAR' if abs(diferencia_correcta) <= 10 else 'CRÍTICO']
+            ]
+            
+            tabla_metricas = self._crear_tabla_metrica(datos_metricas, colores_fondo=[colors.lightblue, colors.lightgreen])
+            story.append(tabla_metricas)
+            story.append(Spacer(1, 20))
+        
+        # ===============================================================
+        # PIE DE PÁGINA
+        # ===============================================================
+        story.append(Spacer(1, 30))
+        story.append(Paragraph("━" * 80, styles['Normal']))
+        story.append(Paragraph("<b>Sistema de Punto de Venta Mi Chas-K</b>", styles['Normal']))
+        story.append(Paragraph(f"Reporte generado automáticamente el {fecha_generacion}", styles['Normal']))
+        story.append(Paragraph("Este reporte utiliza la lógica contable corregida para máxima precisión", styles['Normal']))
         
         # Construir PDF
         doc.build(story)
