@@ -280,20 +280,18 @@ def mostrar_comparacion_detallada(fecha: str):
             ingresos_tarjeta_caja = corte.ventas_tarjeta
             ingresos_transferencia_caja = 0
         
-        # Totales de la caja física
-        total_ingresos_caja = ingresos_efectivo_caja + ingresos_tarjeta_caja + ingresos_transferencia_caja
-        
         # CORRECCIÓN FUNDAMENTAL: El dinero final es el total físico
-        # Para comparar con el sistema, necesitamos calcular el "neto" de la caja:
-        # Dinero final - gastos pagados = dinero neto disponible
-        dinero_neto_caja = dinero_final_caja - gastos_caja
+        # Para comparar con el sistema, necesitamos analizar:
+        # 1. ¿Cuánto efectivo debería haber? = inicial + efectivo_ventas - gastos_efectivo
+        # 2. ¿Cuánto hay realmente? = dinero_final_caja
         
-        # La diferencia real es comparar el dinero neto con lo que debería haber:
-        # Lo que debería haber = inicial + ingresos efectivo
-        dinero_esperado_neto = dinero_inicial_caja + ingresos_efectivo_caja
-        diferencia_caja_interna = dinero_neto_caja - dinero_esperado_neto
+        # Supongamos que todos los gastos se pagan en efectivo (más común)
+        efectivo_esperado_sin_gastos = dinero_inicial_caja + ingresos_efectivo_caja
+        efectivo_esperado_con_gastos = efectivo_esperado_sin_gastos - gastos_caja
+        diferencia_efectivo_simple = dinero_final_caja - ingresos_efectivo_caja
+        diferencia_efectivo_con_gastos = dinero_final_caja - efectivo_esperado_con_gastos
         
-        # La ganancia de la caja es la diferencia entre todos los ingresos y gastos
+        # Para la ganancia, usar el total de ingresos menos gastos
         ganancia_caja = total_ingresos_caja - gastos_caja
         
         # DEBUG: Mostrar cálculos de la caja física con nueva lógica
@@ -307,17 +305,33 @@ def mostrar_comparacion_detallada(fecha: str):
                 st.write(f"  Tarjeta caja: ${ingresos_tarjeta_caja:.2f}")
                 st.write(f"  Transferencia caja: ${ingresos_transferencia_caja:.2f}")
             st.write("---")
-            st.write(f"**NUEVA LÓGICA - Dinero final como total físico:**")
-            st.write(f"  💵 Dinero final físico: ${dinero_final_caja:.2f} (SIN descontar gastos)")
-            st.write(f"  ➖ Gastos pagados: ${gastos_caja:.2f}")
-            st.write(f"  📊 Dinero neto disponible: ${dinero_neto_caja:.2f}")
+            st.write(f"**ANÁLISIS DE DISCREPANCIA:**")
+            st.write(f"  💰 Total ventas sistema: ${total_ventas_sistema:.2f}")
+            st.write(f"  💵 Efectivo sistema: ${ventas_efectivo_sistema:.2f}")
+            st.write(f"  💳 No-efectivo sistema: ${ventas_tarjeta_sistema + ventas_transferencia_sistema:.2f}")
+            st.write(f"  🏦 Dinero final físico: ${dinero_final_caja:.2f}")
+            st.write(f"  📊 Diferencia efectivo vs físico: ${dinero_final_caja - ventas_efectivo_sistema:.2f}")
             st.write("---")
-            st.write(f"**Comparación con lo esperado:**")
-            st.write(f"  Inicial: ${dinero_inicial_caja:.2f}")
-            st.write(f"  + Efectivo: ${ingresos_efectivo_caja:.2f}")
-            st.write(f"  = Esperado neto: ${dinero_esperado_neto:.2f}")
-            st.write(f"  Real neto: ${dinero_neto_caja:.2f}")
-            st.write(f"  🔍 Diferencia: ${diferencia_caja_interna:.2f}")
+            st.write(f"**NUEVA LÓGICA - Comparación de efectivo:**")
+            st.write(f"  💵 Dinero final físico: ${dinero_final_caja:.2f}")
+            st.write(f"  💰 Efectivo esperado (sin gastos): ${efectivo_esperado_sin_gastos:.2f}")
+            st.write(f"  📊 Efectivo esperado (con gastos): ${efectivo_esperado_con_gastos:.2f}")
+            st.write("---")
+            st.write(f"**Análisis de diferencias:**")
+            st.write(f"  🔍 Físico vs Efectivo vendido: ${diferencia_efectivo_simple:.2f}")
+            st.write(f"  🔍 Físico vs Esperado (con gastos): ${diferencia_efectivo_con_gastos:.2f}")
+            st.write("---")
+            st.write(f"**POSIBLES EXPLICACIONES:**")
+            if dinero_final_caja < ventas_efectivo_sistema:
+                st.write(f"  ⚠️ Hay MENOS dinero físico (${dinero_final_caja:.2f}) que efectivo vendido (${ventas_efectivo_sistema:.2f})")
+                st.write(f"  📉 Faltante de efectivo: ${ventas_efectivo_sistema - dinero_final_caja:.2f}")
+                st.write(f"  🤔 Posibles causas: gastos ya pagados, dinero retirado, errores de registro")
+            elif dinero_final_caja > ventas_efectivo_sistema:
+                st.write(f"  ✅ Hay MÁS dinero físico (${dinero_final_caja:.2f}) que efectivo vendido (${ventas_efectivo_sistema:.2f})")
+                st.write(f"  📈 Sobrante de efectivo: ${dinero_final_caja - ventas_efectivo_sistema:.2f}")
+                st.write(f"  🤔 Posibles causas: dinero inicial, ventas no registradas, gastos no pagados")
+            else:
+                st.write(f"  ✅ Dinero físico coincide exactamente con efectivo vendido")
     
     else:
         # Variables por defecto cuando no hay corte
@@ -328,9 +342,10 @@ def mostrar_comparacion_detallada(fecha: str):
         gastos_caja = 0
         dinero_final_caja = 0
         total_ingresos_caja = 0
-        dinero_neto_caja = 0
-        dinero_esperado_neto = 0
-        diferencia_caja_interna = 0
+        efectivo_esperado_sin_gastos = 0
+        efectivo_esperado_con_gastos = 0
+        diferencia_efectivo_simple = 0
+        diferencia_efectivo_con_gastos = 0
         ganancia_caja = 0
     
     # =================================================================
@@ -391,20 +406,20 @@ def mostrar_comparacion_detallada(fecha: str):
             # Estado de la caja física
             st.markdown("**💰 Estado de Caja:**")
             st.text(f"Final físico: ${dinero_final_caja:,.2f}")
-            st.text(f"Gastos:      -${gastos_caja:,.2f}")
-            st.text(f"Neto:         ${dinero_neto_caja:,.2f}")
-            st.text(f"Esperado:     ${dinero_esperado_neto:,.2f}")
+            st.text(f"Efectivo vendido: ${ingresos_efectivo_caja:,.2f}")
+            st.text(f"Gastos:      ${gastos_caja:,.2f}")
+            st.text(f"Diferencia vs efectivo: ${diferencia_efectivo_simple:,.2f}")
             
-            # Verificación interna de caja con explicación clara
-            if abs(diferencia_caja_interna) > 0.5:
-                if diferencia_caja_interna > 0:
-                    st.success(f"💰 Sobrante neto: ${diferencia_caja_interna:,.2f}")
-                    st.info("Hay más dinero neto del esperado. Posibles causas: dinero inicial no registrado, ventas efectivo adicionales.")
+            # Verificación basada en efectivo
+            if abs(diferencia_efectivo_simple) > 0.5:
+                if diferencia_efectivo_simple > 0:
+                    st.success(f"💰 Sobrante: ${diferencia_efectivo_simple:,.2f}")
+                    st.info("Hay más dinero físico que efectivo vendido. Posibles causas: dinero inicial, ventas no registradas.")
                 else:
-                    st.error(f"💸 Faltante neto: ${abs(diferencia_caja_interna):,.2f}")
-                    st.warning("Hay menos dinero neto del esperado. Revisar si hay efectivo faltante o gastos no contabilizados.")
+                    st.error(f"💸 Faltante: ${abs(diferencia_efectivo_simple):,.2f}")
+                    st.warning("Hay menos dinero físico que efectivo vendido. Revisar si se pagaron gastos o se retiró dinero.")
             else:
-                st.success("✅ Caja cuadrada perfectamente")
+                st.success("✅ Dinero físico coincide con efectivo vendido")
         else:
             st.warning("⚠️ No se ha realizado corte de caja")
             st.info("Realiza el corte en 'Nuevo Corte' para ver los datos reales")
@@ -572,39 +587,49 @@ def mostrar_comparacion_detallada(fecha: str):
             - Actualizar registros faltantes
             """)
         
-        # Resumen de estado
-        if abs(diferencia_caja_interna) > 1:
-            if diferencia_caja_interna > 0:
+        # Resumen de estado basado en efectivo
+        if abs(diferencia_efectivo_simple) > 1:
+            if diferencia_efectivo_simple > 0:
                 st.info(f"""
-                � **SOBRANTE EN CAJA FÍSICA**: +${diferencia_caja_interna:,.2f}
+                💰 **SOBRANTE DE EFECTIVO**: +${diferencia_efectivo_simple:,.2f}
+                
+                **Análisis:**
+                - Dinero físico en caja: ${dinero_final_caja:,.2f}
+                - Efectivo de ventas: ${ingresos_efectivo_caja:,.2f}
+                - Sobrante: ${diferencia_efectivo_simple:,.2f}
                 
                 **Posibles causas del sobrante:**
                 - Había dinero inicial que no se registró
-                - Ventas adicionales no contabilizadas en el sistema
-                - Gastos registrados pero no pagados completamente
-                - Dinero de días anteriores
+                - Ventas en efectivo no registradas en el sistema
+                - Gastos registrados pero pagados con otro dinero
                 
                 **Acciones recomendadas:**
                 - Verificar si había dinero inicial al abrir caja
-                - Revisar si hay ventas sin registrar
-                - Confirmar que todos los gastos fueron pagados
+                - Revisar si hay ventas en efectivo sin registrar
+                - Confirmar el origen del dinero extra
                 """)
             else:
                 st.error(f"""
-                💸 **FALTANTE EN CAJA FÍSICA**: ${abs(diferencia_caja_interna):,.2f}
+                💸 **FALTANTE DE EFECTIVO**: ${abs(diferencia_efectivo_simple):,.2f}
+                
+                **Análisis:**
+                - Dinero físico en caja: ${dinero_final_caja:,.2f}
+                - Efectivo de ventas: ${ingresos_efectivo_caja:,.2f}
+                - Faltante: ${abs(diferencia_efectivo_simple):,.2f}
                 
                 **Posibles causas del faltante:**
-                - Gastos adicionales no registrados
-                - Dinero retirado de la caja
-                - Errores en el conteo físico
+                - Gastos pagados en efectivo de la caja
+                - Dinero retirado para otros fines
+                - Errores en el conteo o registro
                 
                 **Acciones recomendadas:**
-                - Revisar gastos no registrados
-                - Verificar retiros de dinero
+                - Verificar gastos pagados en efectivo
+                - Revisar retiros de dinero no registrados
                 - Recontar el dinero físico
                 """)
         else:
-            st.success("✅ **CAJA PERFECTAMENTE CUADRADA**")
+            st.success("✅ **EFECTIVO PERFECTAMENTE CUADRADO**")
+            st.info("El dinero físico en caja coincide exactamente con el efectivo de las ventas.")
 
 # ...existing code...
 
