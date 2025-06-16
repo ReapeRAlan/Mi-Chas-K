@@ -488,6 +488,29 @@ class GastoDiario:
             gastos.append(cls(**data))
         return gastos
 
+    @classmethod
+    def get_by_id(cls, gasto_id: int) -> Optional['GastoDiario']:
+        """Obtiene un gasto específico por ID"""
+        query = "SELECT * FROM gastos_diarios WHERE id = %s"
+        rows = execute_query(query, (gasto_id,))
+        if rows:
+            data = dict(rows[0])
+            data['monto'] = safe_float(data.get('monto', 0))
+            return cls(**data)
+        return None
+
+    def delete(self) -> bool:
+        """Elimina el gasto de la base de datos"""
+        if self.id is None:
+            return False
+        
+        try:
+            query = "DELETE FROM gastos_diarios WHERE id = %s"
+            execute_update(query, (self.id,))
+            return True
+        except Exception:
+            return False
+
     def save(self) -> int:
         """Guarda el gasto diario"""
         if self.fecha_registro is None:

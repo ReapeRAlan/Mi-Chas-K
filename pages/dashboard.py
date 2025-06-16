@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from database.models import Venta, Producto, GastoDiario, CorteCaja, Vendedor
 from database.connection import execute_query
-from utils.helpers import format_currency, get_date_range_options
+from utils.helpers import format_currency, get_date_range_options, show_success_message, show_error_message
 from utils.timezone_utils import get_mexico_date_str, get_mexico_datetime
 import io
 import numpy as np
@@ -148,7 +148,7 @@ def agregar_gasto(fecha: str):
                 st.error("Por favor completa los campos obligatorios (concepto y monto)")
 
 def ver_gastos(fecha: str):
-    """Mostrar gastos del día"""
+    """Mostrar gastos del día con opciones de editar y eliminar"""
     st.write(f"### 📋 Gastos del {fecha}")
     
     gastos = GastoDiario.get_by_fecha(fecha)
@@ -156,17 +156,6 @@ def ver_gastos(fecha: str):
     if not gastos:
         st.info("No hay gastos registrados para esta fecha")
         return
-    
-    # Resumen por categorías
-    df_gastos = pd.DataFrame([{
-        'ID': g.id,
-        'Concepto': g.concepto,
-        'Monto': g.monto,
-        'Categoría': g.categoria,
-        'Vendedor': g.vendedor,
-        'Comprobante': g.comprobante or '',
-        'Descripción': g.descripcion[:50] + '...' if g.descripcion and len(g.descripcion) > 50 else g.descripcion or ''
-    } for g in gastos])
     
     # Métricas de gastos
     total_gastos = sum(g.monto for g in gastos)
@@ -176,8 +165,10 @@ def ver_gastos(fecha: str):
         st.metric("Total Gastos", f"${total_gastos:,.2f}")
     
     with col2:
-        gastos_por_categoria = df_gastos.groupby('Categoría')['Monto'].sum()
-        categoria_mayor = gastos_por_categoria.idxmax() if not gastos_por_categoria.empty else "N/A"
+        categorias_gastos = {}
+        for g in gastos:
+            categorias_gastos[g.categoria] = categorias_gastos.get(g.categoria, 0) + g.monto
+        categoria_mayor = max(categorias_gastos.keys(), key=lambda k: categorias_gastos[k]) if categorias_gastos else "N/A"
         st.metric("Categoría Principal", categoria_mayor)
     
     with col3:
@@ -185,17 +176,118 @@ def ver_gastos(fecha: str):
         st.metric("Promedio por Gasto", f"${promedio_gasto:,.2f}")
     
     # Gráfico de gastos por categoría
-    if not df_gastos.empty:
+    if gastos:
+        df_chart = pd.DataFrame([{'Categoría': k, 'Monto': v} for k, v in categorias_gastos.items()])
         fig_gastos = px.pie(
-            df_gastos, 
+            df_chart, 
             values='Monto', 
             names='Categoría',
             title="Distribución de Gastos por Categoría"
         )
         st.plotly_chart(fig_gastos, use_container_width=True)
     
-    # Tabla de gastos
-    st.dataframe(df_gastos, use_container_width=True)
+    # Lista de gastos con opciones de editar/eliminar
+    st.subheader("💰 Lista de Gastos")
+    
+    for i, gasto in enumerate(gastos):
+        with st.expander(f"💸 {gasto.concepto} - ${gasto.monto:,.2f}", expanded=False):
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
+            with col1:
+                st.write(f"**Categoría:** {gasto.categoria}")
+                st.write(f"**Vendedor:** {gasto.vendedor}")
+                st.write(f"**Comprobante:** {gasto.comprobante or 'Sin comprobante'}")
+                if gasto.descripcion:
+                    st.write(f"**Descripción:** {gasto.descripcion}")
+            
+            with col2:
+                if st.button("✏️ Editar", key=f"edit_{gasto.id}_{i}"):
+                    st.session_state[f'editing_gasto_{gasto.id}'] = True
+                    st.rerun()
+            
+            with col3:
+                if st.button("🗑️ Eliminar", key=f"delete_{gasto.id}_{i}", type="secondary"):
+                    if st.session_state.get(f'confirm_delete_{gasto.id}', False):
+                        # Eliminar el gasto
+                        if gasto.delete():
+                            show_success_message(f"Gasto '{gasto.concepto}' eliminado exitosamente")
+                            # Limpiar el estado de confirmación
+                            if f'confirm_delete_{gasto.id}' in st.session_state:
+                                del st.session_state[f'confirm_delete_{gasto.id}']
+                            st.rerun()
+                        else:
+                            show_error_message("Error al eliminar el gasto")
+                    else:
+                        st.session_state[f'confirm_delete_{gasto.id}'] = True
+                        st.rerun()
+            
+            # Mostrar confirmación de eliminación
+            if st.session_state.get(f'confirm_delete_{gasto.id}', False):
+                st.warning("⚠️ ¿Estás seguro de que deseas eliminar este gasto? Esta acción no se puede deshacer.")
+                col_confirm, col_cancel = st.columns(2)
+                with col_confirm:
+                    if st.button("✅ Confirmar", key=f"confirm_yes_{gasto.id}_{i}"):
+                        if gasto.delete():
+                            show_success_message(f"Gasto '{gasto.concepto}' eliminado exitosamente")
+                            if f'confirm_delete_{gasto.id}' in st.session_state:
+                                del st.session_state[f'confirm_delete_{gasto.id}']
+                            st.rerun()
+                        else:
+                            show_error_message("Error al eliminar el gasto")
+                with col_cancel:
+                    if st.button("❌ Cancelar", key=f"confirm_no_{gasto.id}_{i}"):
+                        if f'confirm_delete_{gasto.id}' in st.session_state:
+                            del st.session_state[f'confirm_delete_{gasto.id}']
+                        st.rerun()
+            
+            # Formulario de edición
+            if st.session_state.get(f'editing_gasto_{gasto.id}', False):
+                st.write("---")
+                st.write("**✏️ Editando gasto:**")
+                
+                with st.form(f"edit_gasto_{gasto.id}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        nuevo_concepto = st.text_input("Concepto:", value=gasto.concepto)
+                        nuevo_monto = st.number_input("Monto:", value=float(gasto.monto), min_value=0.01, step=0.01)
+                        nueva_categoria = st.selectbox("Categoría:", 
+                                                     ["Operación", "Compras", "Servicios", "Marketing", "Mantenimiento", "Otros"],
+                                                     index=["Operación", "Compras", "Servicios", "Marketing", "Mantenimiento", "Otros"].index(gasto.categoria) if gasto.categoria in ["Operación", "Compras", "Servicios", "Marketing", "Mantenimiento", "Otros"] else 0)
+                    
+                    with col2:
+                        nuevo_vendedor = st.text_input("Vendedor:", value=gasto.vendedor)
+                        nuevo_comprobante = st.text_input("Comprobante:", value=gasto.comprobante or "")
+                        nueva_descripcion = st.text_area("Descripción:", value=gasto.descripcion or "")
+                    
+                    col_save, col_cancel = st.columns(2)
+                    
+                    with col_save:
+                        if st.form_submit_button("💾 Guardar cambios"):
+                            if not nuevo_concepto.strip():
+                                show_error_message("El concepto es obligatorio")
+                            elif nuevo_monto <= 0:
+                                show_error_message("El monto debe ser mayor a 0")
+                            else:
+                                # Actualizar el gasto
+                                gasto.concepto = nuevo_concepto.strip()
+                                gasto.monto = nuevo_monto
+                                gasto.categoria = nueva_categoria
+                                gasto.vendedor = nuevo_vendedor.strip()
+                                gasto.comprobante = nuevo_comprobante.strip()
+                                gasto.descripcion = nueva_descripcion.strip()
+                                
+                                if gasto.save():
+                                    show_success_message(f"Gasto actualizado exitosamente")
+                                    del st.session_state[f'editing_gasto_{gasto.id}']
+                                    st.rerun()
+                                else:
+                                    show_error_message("Error al actualizar el gasto")
+                    
+                    with col_cancel:
+                        if st.form_submit_button("❌ Cancelar"):
+                            del st.session_state[f'editing_gasto_{gasto.id}']
+                            st.rerun()
 
 def mostrar_corte_caja():
     """Página de corte de caja mejorada con comparación detallada"""
@@ -264,7 +356,7 @@ def mostrar_comparacion_detallada(fecha: str):
         
         # Diferencia: Sistema - Caja
         diferencia_correcta = resultado_sistema - resultado_caja
-        diferencia_registrada = corte.diferencia
+        diferencia_registrada = corte.diferencia or 0.0
         
         # =================================================================
         # PRESENTACIÓN VISUAL CLARA
@@ -399,13 +491,16 @@ Diferencia = Sistema - Caja
             """)
             
             # Comparación con método anterior (si existe)
-            if abs(diferencia_registrada - diferencia_correcta) >= 0.01:
+            diff_registrada = float(diferencia_registrada) if diferencia_registrada is not None else 0.0
+            diff_correcta = float(diferencia_correcta) if diferencia_correcta is not None else 0.0
+            
+            if abs(diff_registrada - diff_correcta) >= 0.01:
                 st.markdown("#### ⚠️ Comparación con Registro Actual")
                 st.warning(f"""
                 **Diferencia en el cálculo detectada:**
-                - Método correcto (nuevo): ${diferencia_correcta:,.2f}
-                - Registro actual (anterior): ${diferencia_registrada:,.2f}
-                - Discrepancia: ${abs(diferencia_correcta - diferencia_registrada):,.2f}
+                - Método correcto (nuevo): ${diff_correcta:,.2f}
+                - Registro actual (anterior): ${diff_registrada:,.2f}
+                - Discrepancia: ${abs(diff_correcta - diff_registrada):,.2f}
                 
                 **Recomendación**: Actualizar el registro para usar la fórmula correcta.
                 """)
