@@ -523,8 +523,15 @@ def mostrar_formulario_venta():
             # Procesar la venta con fecha personalizada
             fecha_venta = st.session_state.get('fecha_venta_personalizada')
             if fecha_venta:
-                from datetime import datetime, time
-                fecha_completa = datetime.combine(fecha_venta, time())
+                fecha_hoy_mexico = get_mexico_datetime().date()
+                if fecha_venta == fecha_hoy_mexico:
+                    # Si es la fecha de hoy, usar fecha y hora completa actual de México
+                    fecha_completa = get_mexico_datetime()
+                else:
+                    # Si es una fecha diferente (manual), usar esa fecha con la hora actual de México
+                    from datetime import datetime
+                    hora_actual_mexico = get_mexico_datetime().time()
+                    fecha_completa = datetime.combine(fecha_venta, hora_actual_mexico)
             else:
                 fecha_completa = None
             
@@ -743,6 +750,15 @@ def mostrar_panel_pago(orden_id):
                                    value=get_mexico_datetime().date(),
                                    key=f"fecha_pago_{orden_id}")
         
+        # Mostrar información sobre la hora que se usará
+        fecha_hoy_mexico = get_mexico_datetime().date()
+        if fecha_venta == fecha_hoy_mexico:
+            hora_actual = get_mexico_datetime().strftime("%H:%M:%S")
+            st.info(f"⏰ **Fecha de hoy** - Se usará la hora actual: {hora_actual}")
+        else:
+            hora_actual = get_mexico_datetime().strftime("%H:%M:%S")
+            st.info(f"📅 **Fecha personalizada** - Se usará la hora actual: {hora_actual}")
+        
         # Observaciones finales
         obs_finales = st.text_area("📝 Observaciones finales:", 
                                   value=orden['observaciones'],
@@ -771,9 +787,17 @@ def procesar_pago_orden(orden_id, fecha_venta, observaciones_finales):
             st.error("❌ No hay productos en la orden")
             return
         
-        # Preparar datos para la venta
-        from datetime import datetime, time
-        fecha_venta_completa = datetime.combine(fecha_venta, time())
+        # Determinar la fecha y hora para la venta
+        fecha_hoy_mexico = get_mexico_datetime().date()
+        
+        if fecha_venta == fecha_hoy_mexico:
+            # Si es la fecha de hoy, usar fecha y hora completa actual de México
+            fecha_venta_completa = get_mexico_datetime()
+        else:
+            # Si es una fecha diferente (manual), usar esa fecha con la hora actual de México
+            from datetime import datetime
+            hora_actual_mexico = get_mexico_datetime().time()
+            fecha_venta_completa = datetime.combine(fecha_venta, hora_actual_mexico)
         
         # Procesar venta usando el carrito
         venta = carrito.procesar_venta(
