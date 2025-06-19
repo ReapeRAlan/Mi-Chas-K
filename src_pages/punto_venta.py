@@ -22,8 +22,13 @@ def inicializar_ordenes_multiples():
         st.session_state.contador_ordenes = 1
 
 def crear_nueva_orden():
-    """Crear una nueva orden"""
+    """Crear una nueva orden con valores por defecto del sistema"""
     orden_id = f"ORDEN-{st.session_state.contador_ordenes:03d}"
+    
+    # Obtener valores por defecto
+    vendedores = Vendedor.get_nombres_activos()
+    vendedor_default = st.session_state.get('vendedor_seleccionado', vendedores[0] if vendedores else 'Sistema')
+    
     st.session_state.ordenes_multiples[orden_id] = {
         'id': orden_id,
         'carrito': Carrito(),
@@ -31,7 +36,7 @@ def crear_nueva_orden():
         'estado': 'En proceso',
         'cliente': '',
         'observaciones': '',
-        'vendedor': '',
+        'vendedor': vendedor_default,
         'metodo_pago': 'Efectivo',
         'descuento': 0.0
     }
@@ -136,17 +141,17 @@ def mostrar_gestor_ordenes():
                 st.markdown(f"""
                 <div class="orden-card {estado_clase}">
                     <div style="text-align: center;">
-                        <h3 style="margin: 0; color: {'#dc3545' if es_activa else '#495057'};">
+                        <h3 style="margin: 0; color: {'#dc2626' if es_activa else '#374151'};">
                             {'🎯' if es_activa else '📋'} {orden_id}
                         </h3>
                         <div style="margin: 15px 0;">
                             <div style="display: flex; justify-content: space-between; margin: 8px 0;">
                                 <span><strong>Items:</strong></span>
-                                <span style="color: #007bff; font-weight: bold;">{total_items}</span>
+                                <span style="color: {'#b91c1c' if es_activa else '#1d4ed8'}; font-weight: bold;">{total_items}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between; margin: 8px 0;">
                                 <span><strong>Total:</strong></span>
-                                <span style="color: #28a745; font-weight: bold; font-size: 18px;">${total_precio:.2f}</span>
+                                <span style="color: {'#dc2626' if es_activa else '#059669'}; font-weight: bold; font-size: 18px;">${total_precio:.2f}</span>
                             </div>
                             <div style="margin: 10px 0;">
                                 <span class="estado-badge estado-{'completada' if orden['estado'] == 'Completada' else 'proceso'}">
@@ -154,7 +159,7 @@ def mostrar_gestor_ordenes():
                                 </span>
                             </div>
                         </div>
-                        <div style="font-size: 12px; color: #6c757d;">
+                        <div style="font-size: 12px; color: {'#991b1b' if es_activa else '#4b5563'};">
                             {orden['fecha_creacion'].strftime('%H:%M:%S')}
                         </div>
                     </div>
@@ -619,15 +624,36 @@ def mostrar_carrito_orden_activa():
         col1, col2 = st.columns(2)
         with col1:
             orden['cliente'] = st.text_input("👤 Cliente:", value=orden['cliente'], key=f"cliente_{orden['id']}")
-            orden['vendedor'] = st.text_input("👨‍💼 Vendedor:", value=orden['vendedor'], key=f"vendedor_{orden['id']}")
+            
+            # Selector de vendedor con opciones de la base de datos
+            vendedores = Vendedor.get_nombres_activos()
+            if vendedores:
+                try:
+                    vendedor_index = vendedores.index(orden['vendedor']) if orden['vendedor'] in vendedores else 0
+                except ValueError:
+                    vendedor_index = 0
+                
+                orden['vendedor'] = st.selectbox("👨‍💼 Vendedor:", 
+                                                vendedores,
+                                                index=vendedor_index,
+                                                key=f"vendedor_{orden['id']}")
+            else:
+                orden['vendedor'] = st.text_input("👨‍💼 Vendedor:", value=orden['vendedor'], key=f"vendedor_text_{orden['id']}")
+        
         with col2:
+            metodos_pago = ["Efectivo", "Tarjeta", "Transferencia"]
+            try:
+                metodo_index = metodos_pago.index(orden['metodo_pago'])
+            except ValueError:
+                metodo_index = 0
+                
             orden['metodo_pago'] = st.selectbox("💳 Método de Pago:", 
-                                              ["Efectivo", "Tarjeta", "Transferencia"], 
-                                              index=["Efectivo", "Tarjeta", "Transferencia"].index(orden['metodo_pago']),
+                                              metodos_pago, 
+                                              index=metodo_index,
                                               key=f"metodo_{orden['id']}")
             orden['descuento'] = st.number_input("💰 Descuento (%):", 
                                                min_value=0.0, max_value=100.0, 
-                                               value=orden['descuento'], step=1.0,
+                                               value=float(orden['descuento']), step=1.0,
                                                key=f"descuento_{orden['id']}")
         orden['observaciones'] = st.text_area("📝 Observaciones:", value=orden['observaciones'], key=f"obs_{orden['id']}")
     
@@ -639,19 +665,17 @@ def mostrar_carrito_orden_activa():
             col1, col2, col3, col4, col5 = st.columns([3, 1, 1, 1, 1])
             
             with col1:
-                st.write(f"**{item.nombre}**")
+                st.write(f"**{item.producto.nombre}**")
             with col2:
                 nueva_cantidad = st.number_input("Cant.", min_value=1, value=item.cantidad, 
                                                key=f"cant_{orden['id']}_{idx}")
                 if nueva_cantidad != item.cantidad:
                     item.cantidad = nueva_cantidad
-                    item.subtotal = nueva_cantidad * item.precio
             with col3:
-                nuevo_precio = st.number_input("Precio", min_value=0.01, value=item.precio, 
+                nuevo_precio = st.number_input("Precio", min_value=0.01, value=item.producto.precio, 
                                              step=0.01, key=f"precio_{orden['id']}_{idx}")
-                if nuevo_precio != item.precio:
-                    item.precio = nuevo_precio
-                    item.subtotal = item.cantidad * nuevo_precio
+                if nuevo_precio != item.producto.precio:
+                    item.producto.precio = nuevo_precio
             with col4:
                 st.write(f"${item.subtotal:.2f}")
             with col5:
@@ -800,12 +824,23 @@ def aplicar_estilos_ordenes():
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
+        color: #212529 !important;
     }
     
     .orden-card.activa {
         border-color: #dc3545;
         background: linear-gradient(135deg, #fff5f5 0%, #ffe6e6 100%);
         box-shadow: 0 6px 12px rgba(220,53,69,0.2);
+        color: #721c24 !important;
+    }
+    
+    .orden-card h3 {
+        color: inherit !important;
+        margin: 0;
+    }
+    
+    .orden-card span, .orden-card div {
+        color: inherit !important;
     }
     
     .orden-card:hover {
@@ -853,6 +888,20 @@ def aplicar_estilos_ordenes():
         border-radius: 10px;
         border-left: 5px solid #2196f3;
         margin: 10px 0;
+        color: #1a1a1a !important;
+    }
+    
+    .custom-info h4 {
+        color: #0d47a1 !important;
+        margin-top: 0;
+    }
+    
+    .custom-info p, .custom-info li {
+        color: #263238 !important;
+    }
+    
+    .custom-info strong {
+        color: #1565c0 !important;
     }
     
     /* Badges de estado */
@@ -875,6 +924,39 @@ def aplicar_estilos_ordenes():
         background-color: #d4edda;
         color: #155724;
         border: 1px solid #c3e6cb;
+    }
+    
+    /* Mejorar contraste general */
+    .stMarkdown {
+        color: inherit !important;
+    }
+    
+    /* Estilos para elementos específicos con mejor contraste */
+    div[data-testid="column"] {
+        color: inherit !important;
+    }
+    
+    /* Botones con mejor contraste */
+    .stButton > button {
+        color: #ffffff !important;
+        background-color: #007bff !important;
+        border-color: #007bff !important;
+    }
+    
+    .stButton > button[kind="primary"] {
+        background-color: #dc3545 !important;
+        border-color: #dc3545 !important;
+        color: #ffffff !important;
+    }
+    
+    .stButton > button:hover {
+        background-color: #0056b3 !important;
+        border-color: #0056b3 !important;
+    }
+    
+    .stButton > button[kind="primary"]:hover {
+        background-color: #c82333 !important;
+        border-color: #bd2130 !important;
     }
     </style>
     """, unsafe_allow_html=True)
