@@ -4,12 +4,16 @@ Permite ver, modificar y reimprimir tickets
 """
 import streamlit as st
 import pandas as pd
+import logging
 from datetime import datetime, timedelta
 from database.models import Venta, DetalleVenta, Producto, Vendedor
 from database.connection import execute_query, execute_update
 from utils.helpers import format_currency
 from utils.timezone_utils import get_mexico_datetime, get_mexico_date_str, format_mexico_datetime
 from utils.pdf_generator import TicketGenerator
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 def safe_int(value):
     """Convierte valor a int de forma segura, manejando numpy.int64"""
@@ -384,7 +388,7 @@ def modificar_info_general(orden_id, venta):
             
             # Estado (nuevo campo)
             estados = ["Completada", "Pendiente", "Cancelada", "Reembolsada"]
-            estado_actual = venta.get('estado', 'Completada')
+            estado_actual = venta.get('estado', 'Completada') or 'Completada'  # Manejar valores NULL
             nuevo_estado = st.selectbox(
                 "📊 Estado:",
                 estados,
@@ -872,6 +876,14 @@ def eliminar_producto_orden(detalle_id, cantidad, producto_id):
 def agregar_producto_a_orden(orden_id, producto_id, cantidad, precio):
     """Agrega un nuevo producto a la orden existente"""
     try:
+        # Verificar que la orden existe
+        orden_query = "SELECT id FROM ventas WHERE id = %s"
+        orden_data = execute_query(orden_query, (orden_id,))
+        
+        if not orden_data:
+            st.error("❌ La orden no existe")
+            return
+        
         # Verificar stock
         stock_query = "SELECT stock FROM productos WHERE id = %s"
         stock_data = execute_query(stock_query, (producto_id,))
@@ -894,11 +906,15 @@ def agregar_producto_a_orden(orden_id, producto_id, cantidad, precio):
         stock_update = "UPDATE productos SET stock = stock - %s WHERE id = %s"
         execute_update(stock_update, (cantidad, producto_id))
         
+        # Recalcular total de la orden
+        recalcular_total_orden(orden_id)
+        
         st.success("✅ Producto agregado a la orden")
         st.rerun()
         
     except Exception as e:
         st.error(f"❌ Error al agregar producto: {str(e)}")
+        logger.error(f"Error en agregar_producto_a_orden: {str(e)}")
 
 def eliminar_orden_completa(orden_id):
     """Elimina una orden completa y restaura el stock"""
