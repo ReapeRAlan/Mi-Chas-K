@@ -47,7 +47,6 @@ st.set_page_config(
 )
 
 # Desactivar navegación automática de páginas
-import streamlit.components.v1 as components
 st.markdown("""
 <style>
 /* Ocultar navegación automática de páginas de Streamlit */
@@ -57,8 +56,62 @@ section[data-testid="stSidebar"] > div:first-child {
 section[data-testid="stSidebar"] > div:first-child > div:first-child {
     display: none !important;
 }
-.stSelectbox > div > div > div {
-    background-color: #f0f2f6;
+
+/* Mejorar visibilidad del selectbox en el sidebar */
+.stSelectbox {
+    margin-bottom: 1rem;
+}
+
+/* Estilizar el contenedor principal del selectbox */
+div[data-testid="stSelectbox"] > div {
+    background-color: #f8f9fa !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 0.375rem !important;
+}
+
+/* Estilizar el texto seleccionado del selectbox */
+div[data-testid="stSelectbox"] div[role="combobox"] {
+    color: #212529 !important;
+    font-weight: 500 !important;
+    background-color: #ffffff !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 0.375rem !important;
+}
+
+/* Hover del selectbox */
+div[data-testid="stSelectbox"] div[role="combobox"]:hover {
+    border-color: #1f77b4 !important;
+    box-shadow: 0 0 0 0.2rem rgba(31, 119, 180, 0.25) !important;
+}
+
+/* Estilizar las opciones del dropdown */
+div[data-baseweb="popover"] div[role="listbox"] {
+    background-color: white !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 0.375rem !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Estilizar cada opción */
+div[data-baseweb="popover"] div[role="listbox"] div[role="option"] {
+    color: #212529 !important;
+    background-color: white !important;
+    padding: 0.5rem 0.75rem !important;
+}
+
+/* Estilizar la opción al hacer hover */
+div[data-baseweb="popover"] div[role="listbox"] div[role="option"]:hover,
+div[data-baseweb="popover"] div[role="listbox"] div[role="option"][aria-selected="true"] {
+    background-color: #e3f2fd !important;
+    color: #1565c0 !important;
+}
+
+/* Estilizar el label del selectbox */
+div[data-testid="stSelectbox"] label {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    margin-bottom: 0.5rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
