@@ -403,14 +403,23 @@ class Carrito:
         """Retorna la cantidad total de items en el carrito"""
         return sum(item.cantidad for item in self.items)
     
-    def procesar_venta(self, metodo_pago: str = "Efectivo", vendedor: str = "", observaciones: str = "") -> Optional[Venta]:
-        """Procesa la venta del carrito actual"""
+    def procesar_venta(self, metodo_pago: str = "Efectivo", vendedor: str = "", observaciones: str = "", fecha_personalizada=None) -> Optional[Venta]:
+        """Procesa la venta del carrito actual con fecha personalizable"""
         if not self.items:
             return None
         
-        # Obtener fecha de México ANTES de crear la venta
-        fecha_mexico = get_mexico_datetime()
-        logger.info(f"🕐 Fecha México para venta: {fecha_mexico}")
+        # Usar fecha personalizada o fecha actual de México
+        if fecha_personalizada:
+            # Si se proporciona solo una fecha (date), convertir a datetime
+            if hasattr(fecha_personalizada, 'date') and not hasattr(fecha_personalizada, 'hour'):
+                from datetime import datetime, time
+                fecha_venta = datetime.combine(fecha_personalizada, time())
+            else:
+                fecha_venta = fecha_personalizada
+        else:
+            fecha_venta = get_mexico_datetime()
+        
+        logger.info(f"🕐 Fecha para venta: {fecha_venta}")
         
         # Crear la venta CON fecha explícita
         venta = Venta(
@@ -418,7 +427,7 @@ class Carrito:
             metodo_pago=metodo_pago,
             vendedor=vendedor,
             observaciones=observaciones,
-            fecha=fecha_mexico  # ✅ Fecha explícita
+            fecha=fecha_venta  # ✅ Fecha explícita (personalizada o actual)
         )
         
         logger.info(f"🛒 Venta creada con fecha: {venta.fecha}")

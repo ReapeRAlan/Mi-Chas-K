@@ -18,6 +18,10 @@ def mostrar_punto_venta():
     # Inicializar estado de sesión
     initialize_session_state()
     
+    # Panel de configuración de venta (expandible)
+    with st.expander("⚙️ Configuración de Venta", expanded=False):
+        configurar_venta_avanzada()
+    
     # Verificar si hay una venta procesada para mostrar opciones post-venta
     if st.session_state.get('venta_procesada') and st.session_state.get('show_ticket'):
         mostrar_opciones_post_venta(st.session_state.venta_procesada)
@@ -31,6 +35,62 @@ def mostrar_punto_venta():
     
     with col2:
         mostrar_carrito()
+
+def configurar_venta_avanzada():
+    """Panel de configuración avanzada para la venta"""
+    st.markdown("### 📅 Configuración de Fecha y Vendedor")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Permitir cambiar la fecha de la venta
+        fecha_venta = st.date_input(
+            "📅 Fecha de la venta:",
+            value=get_mexico_datetime().date(),
+            help="Puedes cambiar la fecha para registrar ventas de días anteriores"
+        )
+        st.session_state.fecha_venta_personalizada = fecha_venta
+    
+    with col2:
+        # Selector de vendedor
+        vendedores = Vendedor.get_nombres_activos()
+        if vendedores:
+            vendedor_actual = st.session_state.get('vendedor_seleccionado', vendedores[0])
+            vendedor = st.selectbox(
+                "👤 Vendedor:",
+                vendedores,
+                index=vendedores.index(vendedor_actual) if vendedor_actual in vendedores else 0
+            )
+            st.session_state.vendedor_seleccionado = vendedor
+        else:
+            st.warning("⚠️ No hay vendedores configurados")
+            st.session_state.vendedor_seleccionado = "Sistema"
+    
+    # Información adicional
+    if st.session_state.get('fecha_venta_personalizada') != get_mexico_datetime().date():
+        st.info(f"📌 La venta se registrará con fecha: **{st.session_state.fecha_venta_personalizada}**")
+    
+    # Opción de descuento rápido
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        descuento_rapido = st.number_input(
+            "💰 Descuento rápido ($):",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            help="Aplicar descuento directo a la venta"
+        )
+        st.session_state.descuento_rapido = descuento_rapido
+    
+    with col2:
+        # Observaciones rápidas
+        observaciones = st.text_input(
+            "📝 Observaciones:",
+            placeholder="Notas sobre la venta...",
+            help="Comentarios adicionales para la venta"
+        )
+        st.session_state.observaciones_venta = observaciones
 
 def mostrar_productos():
     """Muestra los productos disponibles con botones grandes"""
@@ -226,27 +286,61 @@ def mostrar_formulario_venta():
         else:
             vendedor_final = vendedor_seleccionado
         
-        # Observaciones
-        observaciones = st.text_area("Observaciones (opcional):")
-        
-        # Descuento
-        descuento_porcentaje = st.number_input(
-            "Descuento (%):",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.0,
-            step=0.5
+        # Observaciones - usar las del estado de sesión si existen
+        observaciones_default = st.session_state.get('observaciones_venta', '')
+        observaciones = st.text_area(
+            "Observaciones (opcional):",
+            value=observaciones_default,
+            help="Se aplicarán las observaciones de la configuración avanzada si están definidas"
         )
+        
+        # Descuento - combinar descuento rápido con descuento por porcentaje
+        descuento_rapido = st.session_state.get('descuento_rapido', 0.0)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            descuento_porcentaje = st.number_input(
+                "Descuento (%):",
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.5
+            )
+        
+        with col2:
+            descuento_adicional = st.number_input(
+                "Descuento adicional ($):",
+                min_value=0.0,
+                value=descuento_rapido,
+                step=1.0,
+                help="Se suma al descuento configurado en la sección avanzada"
+            )
         
         # Calcular totales
         subtotal = carrito.total
-        descuento_monto = subtotal * (descuento_porcentaje / 100)
-        total_final = subtotal - descuento_monto
+        descuento_porcentaje_monto = subtotal * (descuento_porcentaje / 100)
+        descuento_total = descuento_porcentaje_monto + descuento_adicional
+        total_final = subtotal - descuento_total
+        
+        # Validar que el total no sea negativo
+        if total_final < 0:
+            total_final = 0
+            descuento_total = subtotal
         
         st.write(f"**Subtotal:** {format_currency(subtotal)}")
-        if descuento_monto > 0:
-            st.write(f"**Descuento:** -{format_currency(descuento_monto)}")
+        if descuento_porcentaje_monto > 0:
+            st.write(f"**Descuento (%):** -{format_currency(descuento_porcentaje_monto)}")
+        if descuento_adicional > 0:
+            st.write(f"**Descuento adicional:** -{format_currency(descuento_adicional)}")
+        if descuento_total > 0:
+            st.write(f"**Descuento total:** -{format_currency(descuento_total)}")
         st.write(f"**Total Final:** {format_currency(total_final)}")
+        
+        # Mostrar información de fecha personalizada si aplica
+        fecha_personalizada = st.session_state.get('fecha_venta_personalizada')
+        if fecha_personalizada and fecha_personalizada != get_mexico_datetime().date():
+            st.info(f"📅 Esta venta se registrará con fecha: **{fecha_personalizada}**")
         
         # Botón procesar
         submit_venta = st.form_submit_button("✅ Confirmar Venta", type="primary")
@@ -269,23 +363,31 @@ def mostrar_formulario_venta():
                 show_error_message("Por favor selecciona un vendedor válido")
                 return
             
-            # Procesar la venta
+            # Procesar la venta con fecha personalizada
+            fecha_venta = st.session_state.get('fecha_venta_personalizada')
+            if fecha_venta:
+                from datetime import datetime, time
+                fecha_completa = datetime.combine(fecha_venta, time())
+            else:
+                fecha_completa = None
+            
             venta = carrito.procesar_venta(
                 metodo_pago=metodo_pago,
                 vendedor=vendedor_final,
-                observaciones=observaciones
+                observaciones=observaciones,
+                fecha_personalizada=fecha_completa
             )
             
             if venta:
                 # Aplicar descuento si existe
-                if descuento_monto > 0:
+                if descuento_total > 0:
                     from database.connection import execute_update
                     execute_update(
                         "UPDATE ventas SET total = %s, descuento = %s WHERE id = %s",
-                        (total_final, descuento_monto, venta.id)
+                        (total_final, descuento_total, venta.id)
                     )
                     venta.total = total_final
-                    venta.descuento = descuento_monto
+                    venta.descuento = descuento_total
                 
                 # Guardar en session state
                 st.session_state.venta_procesada = venta
