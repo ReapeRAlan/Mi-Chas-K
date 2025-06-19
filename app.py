@@ -46,6 +46,23 @@ st.set_page_config(
     }
 )
 
+# Desactivar navegación automática de páginas
+import streamlit.components.v1 as components
+st.markdown("""
+<style>
+/* Ocultar navegación automática de páginas de Streamlit */
+section[data-testid="stSidebar"] > div:first-child {
+    padding-top: 0rem;
+}
+section[data-testid="stSidebar"] > div:first-child > div:first-child {
+    display: none !important;
+}
+.stSelectbox > div > div > div {
+    background-color: #f0f2f6;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Inicializar la base de datos
 def init_app():
     """Inicializa la aplicación y la base de datos"""
@@ -182,23 +199,23 @@ def main():
     pagina_codigo = paginas[pagina_seleccionada]
     
     if pagina_codigo == "punto_venta":
-        from pages.punto_venta import mostrar_punto_venta
+        from src_pages.punto_venta import mostrar_punto_venta
         mostrar_punto_venta()
         
     elif pagina_codigo == "inventario":
-        from pages.inventario import mostrar_inventario
+        from src_pages.inventario import mostrar_inventario
         mostrar_inventario()
         
     elif pagina_codigo == "ordenes":
-        from pages.ordenes import mostrar_ordenes
+        from src_pages.ordenes import mostrar_ordenes
         mostrar_ordenes()
         
     elif pagina_codigo == "dashboard":
-        from pages.dashboard import mostrar_dashboard
+        from src_pages.dashboard import mostrar_dashboard
         mostrar_dashboard()
         
     elif pagina_codigo == "configuracion":
-        from pages.configuracion import mostrar_configuracion
+        from src_pages.configuracion import mostrar_configuracion
         mostrar_configuracion()
 
 def mostrar_info_rapida():
@@ -206,29 +223,55 @@ def mostrar_info_rapida():
     st.markdown("### 📊 Info Rápida")
     
     try:
-        from database.models import Producto, Venta
-        from database.connection import execute_query
+        # Verificar si la base de datos está inicializada
+        if not st.session_state.get('db_initialized', False):
+            st.warning("🔧 Base de datos no disponible")
+            st.metric("Stock Bajo", "N/A")
+            st.metric("Ventas Hoy", "N/A") 
+            st.metric("Ingresos Hoy", "N/A MXN")
+            return
         
-        # Productos con stock bajo
-        productos_stock_bajo = len([p for p in Producto.get_all() if p.stock <= 5])
+        from database.models import Producto, Venta
+        
+        # Productos con stock bajo (menor a 5)
+        try:
+            productos = Producto.get_all()
+            productos_stock_bajo = len([p for p in productos if p.stock <= 5])
+        except Exception:
+            productos_stock_bajo = 0
         
         # Ventas de hoy
-        ventas_hoy = Venta.get_ventas_hoy()
-        total_hoy = sum(venta.total for venta in ventas_hoy)
+        try:
+            ventas_hoy = Venta.get_ventas_hoy()
+            total_hoy = sum(float(venta.total) for venta in ventas_hoy) if ventas_hoy else 0.0
+            cantidad_ventas = len(ventas_hoy) if ventas_hoy else 0
+        except Exception:
+            ventas_hoy = []
+            total_hoy = 0.0
+            cantidad_ventas = 0
         
         # Mostrar métricas
         st.metric("Stock Bajo", productos_stock_bajo)
-        st.metric("Ventas Hoy", len(ventas_hoy))
+        st.metric("Ventas Hoy", cantidad_ventas)
         st.metric("Ingresos Hoy", f"{total_hoy:.2f} MXN")
         
         # Estado del carrito
-        if 'carrito' in st.session_state:
-            items_carrito = st.session_state.carrito.cantidad_items
+        if 'carrito' in st.session_state and hasattr(st.session_state.carrito, 'items'):
+            items_carrito = len(st.session_state.carrito.items)
             if items_carrito > 0:
                 st.success(f"🛒 {items_carrito} items en carrito")
+            else:
+                st.info("🛒 Carrito vacío")
+        else:
+            st.info("🛒 Carrito vacío")
         
     except Exception as e:
-        st.error("Error al cargar info rápida")
+        logger.error(f"Error al cargar info rápida: {str(e)}")
+        st.error("❌ Error al cargar información")
+        # Mostrar métricas por defecto
+        st.metric("Stock Bajo", "0")
+        st.metric("Ventas Hoy", "0")
+        st.metric("Ingresos Hoy", "0.00 MXN")
 
 def mostrar_bienvenida():
     """Muestra la página de bienvenida"""
