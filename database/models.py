@@ -113,6 +113,7 @@ class Venta:
     fecha: Optional[datetime] = None
     vendedor: str = ""
     observaciones: str = ""
+    estado: str = "Completada"
 
     @classmethod
     def get_all(cls) -> List['Venta']:
@@ -124,6 +125,9 @@ class Venta:
             data['total'] = safe_float(data.get('total', 0))
             data['descuento'] = safe_float(data.get('descuento', 0))
             data['impuestos'] = safe_float(data.get('impuestos', 0))
+            # Manejar campo estado de forma segura
+            if 'estado' not in data:
+                data['estado'] = 'Completada'
             ventas.append(cls(**data))
         return ventas
     
@@ -138,6 +142,9 @@ class Venta:
             data['total'] = safe_float(data.get('total', 0))
             data['descuento'] = safe_float(data.get('descuento', 0))
             data['impuestos'] = safe_float(data.get('impuestos', 0))
+            # Manejar campo estado de forma segura
+            if 'estado' not in data:
+                data['estado'] = 'Completada'
             ventas.append(cls(**data))
         return ventas
     
@@ -152,6 +159,9 @@ class Venta:
             data['total'] = safe_float(data.get('total', 0))
             data['descuento'] = safe_float(data.get('descuento', 0))
             data['impuestos'] = safe_float(data.get('impuestos', 0))
+            # Manejar campo estado de forma segura
+            if 'estado' not in data:
+                data['estado'] = 'Completada'
             ventas.append(cls(**data))
         return ventas
     
@@ -165,12 +175,12 @@ class Venta:
                 logger.info(f"✅ Fecha ya establecida: {self.fecha}")
                 
             query = """
-                INSERT INTO ventas (total, metodo_pago, descuento, impuestos, fecha, vendedor, observaciones)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO ventas (total, metodo_pago, descuento, impuestos, fecha, vendedor, observaciones, estado)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """
             params = (self.total, self.metodo_pago, self.descuento, 
-                     self.impuestos, self.fecha, self.vendedor, self.observaciones)
+                     self.impuestos, self.fecha, self.vendedor, self.observaciones, self.estado)
             
             logger.info(f"💾 Guardando venta con parámetros: Total=${self.total}, Fecha={self.fecha}")
             
@@ -427,7 +437,8 @@ class Carrito:
             metodo_pago=metodo_pago,
             vendedor=vendedor,
             observaciones=observaciones,
-            fecha=fecha_venta  # ✅ Fecha explícita (personalizada o actual)
+            fecha=fecha_venta,  # ✅ Fecha explícita (personalizada o actual)
+            estado="Completada"  # ✅ Estado por defecto
         )
         
         logger.info(f"🛒 Venta creada con fecha: {venta.fecha}")
