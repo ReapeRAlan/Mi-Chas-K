@@ -1,5 +1,5 @@
 """
-Punto de Venta Simplificado - Versión Funcional Corregida
+Punto de Venta Simplificado - Versión Funcional
 """
 import streamlit as st
 from datetime import datetime
@@ -73,16 +73,9 @@ def show_punto_venta(adapter):
             
             st.subheader(f"💰 Total: ${total:.2f}")
             
-            # Obtener lista de vendedores
-            try:
-                vendedores_query = adapter.execute_query("SELECT nombre FROM vendedores WHERE activo = 1")
-                vendedores_options = [v['nombre'] for v in vendedores_query] if vendedores_query else ["Sistema", "Vendedor 1"]
-            except:
-                vendedores_options = ["Sistema", "Vendedor 1"]
-            
             # Procesar venta
             with st.form("procesar_venta"):
-                vendedor = st.selectbox("👤 Vendedor", vendedores_options)
+                vendedor = st.text_input("👤 Vendedor", value="Sistema")
                 metodo_pago = st.selectbox(
                     "💳 Método de Pago",
                     ["Efectivo", "Tarjeta", "Transferencia"]
@@ -115,75 +108,47 @@ def agregar_al_carrito(producto, cantidad):
     })
 
 def procesar_venta_simple(adapter, total, vendedor, metodo_pago, observaciones):
-    """Procesar la venta de manera simple y robusta"""
+    """Procesar la venta de manera simple"""
     try:
-        # Crear venta principal con datos correctos
-        venta_data = {
-            'fecha': datetime.now().isoformat(),  # Convertir a string para JSON
-            'total': float(total),  # Asegurar que sea float
-            'metodo_pago': metodo_pago,
-            'vendedor': vendedor,
-            'observaciones': observaciones,
-            'descuento': 0.0
-        }
-        
+        # Crear venta
         venta_id = adapter.execute_update("""
             INSERT INTO ventas (fecha, total, metodo_pago, vendedor, observaciones, descuento)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (datetime.now(), float(total), metodo_pago, vendedor, observaciones, 0.0),
-        sync_data={'table': 'ventas', 'operation': 'INSERT', 'data': venta_data})
+        """, (datetime.now(), total, metodo_pago, vendedor, observaciones, 0.0))
         
         if not venta_id:
-            st.error("❌ Error: No se pudo crear la venta")
             return False
         
-        # Agregar items de venta (detalles)
+        # Agregar items de venta
         for item in st.session_state.carrito:
-            subtotal = float(item['cantidad']) * float(item['precio'])
-            
-            detalle_data = {
-                'venta_id': int(venta_id),
-                'producto_id': int(item['id']),
-                'cantidad': int(item['cantidad']),  # Asegurar que sea entero
-                'precio_unitario': float(item['precio']),
-                'subtotal': float(subtotal)
-            }
+            subtotal = item['cantidad'] * item['precio']
             
             adapter.execute_update("""
                 INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
                 VALUES (?, ?, ?, ?, ?)
-            """, (int(venta_id), int(item['id']), int(item['cantidad']), 
-                  float(item['precio']), float(subtotal)),
-            sync_data={'table': 'detalle_ventas', 'operation': 'INSERT', 'data': detalle_data})
+            """, (venta_id, item['id'], item['cantidad'], item['precio'], subtotal))
             
-            # Actualizar stock - CORREGIDO
+            # Actualizar stock si existe la columna
             try:
-                # Datos correctos para la sincronización
-                stock_update_data = {
-                    'id': int(item['id']),
-                    'stock': f"COALESCE(stock, 0) - {int(item['cantidad'])}"  # Descripción del cambio
-                }
-                
                 adapter.execute_update("""
-                    UPDATE productos SET stock = COALESCE(stock, 0) - ? WHERE id = ?
-                """, (int(item['cantidad']), int(item['id'])),
-                sync_data={'table': 'productos', 'operation': 'UPDATE', 'data': stock_update_data})
-                
-            except Exception as stock_error:
-                # Log del error pero continuar
-                st.warning(f"⚠️ No se pudo actualizar stock para {item['nombre']}: {stock_error}")
+                    UPDATE productos SET stock = stock - ? WHERE id = ?
+                """, (item['cantidad'], item['id']))
+            except:
+                pass  # Si no existe columna stock, continuar
         
-        # Forzar sincronización inmediata después de la venta
+        # FORZAR SINCRONIZACIÓN INMEDIATA después de venta crítica
         try:
-            adapter.force_sync()
-            st.info("🔄 Venta sincronizada con servidor")
-        except:
-            st.warning("⚠️ Venta guardada localmente, se sincronizará automáticamente")
+            if hasattr(adapter, 'force_sync_now'):
+                adapter.force_sync_now()
+                st.success("🔄 Venta sincronizada exitosamente")
+            elif hasattr(adapter, 'force_sync'):
+                adapter.force_sync()
+                st.success("🔄 Sincronización iniciada")
+        except Exception as sync_error:
+            st.warning(f"⚠️ Venta guardada pero error en sincronización: {sync_error}")
         
         return True
         
     except Exception as e:
-        st.error(f"❌ Error procesando venta: {e}")
-        import traceback
-        st.error(f"Detalles del error: {traceback.format_exc()}")
+        st.error(f"Error: {e}")
         return False

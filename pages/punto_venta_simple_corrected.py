@@ -117,10 +117,10 @@ def agregar_al_carrito(producto, cantidad):
 def procesar_venta_simple(adapter, total, vendedor, metodo_pago, observaciones):
     """Procesar la venta de manera simple y robusta"""
     try:
-        # Crear venta principal con datos correctos
+        # Crear venta principal
         venta_data = {
-            'fecha': datetime.now().isoformat(),  # Convertir a string para JSON
-            'total': float(total),  # Asegurar que sea float
+            'fecha': datetime.now(),
+            'total': total,
             'metodo_pago': metodo_pago,
             'vendedor': vendedor,
             'observaciones': observaciones,
@@ -130,7 +130,8 @@ def procesar_venta_simple(adapter, total, vendedor, metodo_pago, observaciones):
         venta_id = adapter.execute_update("""
             INSERT INTO ventas (fecha, total, metodo_pago, vendedor, observaciones, descuento)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (datetime.now(), float(total), metodo_pago, vendedor, observaciones, 0.0),
+        """, (venta_data['fecha'], venta_data['total'], venta_data['metodo_pago'], 
+              venta_data['vendedor'], venta_data['observaciones'], venta_data['descuento']),
         sync_data={'table': 'ventas', 'operation': 'INSERT', 'data': venta_data})
         
         if not venta_id:
@@ -139,46 +140,37 @@ def procesar_venta_simple(adapter, total, vendedor, metodo_pago, observaciones):
         
         # Agregar items de venta (detalles)
         for item in st.session_state.carrito:
-            subtotal = float(item['cantidad']) * float(item['precio'])
+            subtotal = item['cantidad'] * item['precio']
             
             detalle_data = {
-                'venta_id': int(venta_id),
-                'producto_id': int(item['id']),
-                'cantidad': int(item['cantidad']),  # Asegurar que sea entero
-                'precio_unitario': float(item['precio']),
-                'subtotal': float(subtotal)
+                'venta_id': venta_id,
+                'producto_id': item['id'],
+                'cantidad': item['cantidad'],
+                'precio_unitario': item['precio'],
+                'subtotal': subtotal
             }
             
             adapter.execute_update("""
                 INSERT INTO detalle_ventas (venta_id, producto_id, cantidad, precio_unitario, subtotal)
                 VALUES (?, ?, ?, ?, ?)
-            """, (int(venta_id), int(item['id']), int(item['cantidad']), 
-                  float(item['precio']), float(subtotal)),
+            """, (detalle_data['venta_id'], detalle_data['producto_id'], detalle_data['cantidad'], 
+                  detalle_data['precio_unitario'], detalle_data['subtotal']),
             sync_data={'table': 'detalle_ventas', 'operation': 'INSERT', 'data': detalle_data})
             
-            # Actualizar stock - CORREGIDO
+            # Actualizar stock si existe la columna
             try:
-                # Datos correctos para la sincronización
-                stock_update_data = {
-                    'id': int(item['id']),
-                    'stock': f"COALESCE(stock, 0) - {int(item['cantidad'])}"  # Descripción del cambio
+                stock_data = {
+                    'id': item['id'],
+                    'stock_reduction': item['cantidad']
                 }
                 
                 adapter.execute_update("""
                     UPDATE productos SET stock = COALESCE(stock, 0) - ? WHERE id = ?
-                """, (int(item['cantidad']), int(item['id'])),
-                sync_data={'table': 'productos', 'operation': 'UPDATE', 'data': stock_update_data})
-                
+                """, (item['cantidad'], item['id']),
+                sync_data={'table': 'productos', 'operation': 'UPDATE', 'data': stock_data})
             except Exception as stock_error:
-                # Log del error pero continuar
-                st.warning(f"⚠️ No se pudo actualizar stock para {item['nombre']}: {stock_error}")
-        
-        # Forzar sincronización inmediata después de la venta
-        try:
-            adapter.force_sync()
-            st.info("🔄 Venta sincronizada con servidor")
-        except:
-            st.warning("⚠️ Venta guardada localmente, se sincronizará automáticamente")
+                # Si no existe columna stock, continuar sin error
+                pass
         
         return True
         
