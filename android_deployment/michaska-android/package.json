@@ -1,0 +1,22 @@
+{
+  "name": "michaska-android",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@awesome-cordova-plugins/bluetooth-serial": "^8.0.2",
+    "@capacitor-community/bluetooth-le": "^7.1.1",
+    "@capacitor/android": "^7.4.0",
+    "@capacitor/cli": "^7.4.0",
+    "@capacitor/core": "^7.4.0"
+  },
+  "description": "",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

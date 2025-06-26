@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>MiChaska POS</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0066cc">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            overflow-x: hidden;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #0066cc;
+            color: white;
+            font-size: 1.2rem;
+        }
+        .app-container {
+            max-width: 100vw;
+            height: 100vh;
+            overflow: auto;
+        }
+        iframe {
+            width: 100%;
+            height: 100vh;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="loading">
+            <div>
+                <h2>🚀 MiChaska POS</h2>
+                <p>Cargando sistema...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/src/services/printer.js"></script>
+    <script>
+        // Cargar la aplicación Streamlit
+        document.addEventListener('DOMContentLoaded', function() {
+            const appDiv = document.getElementById('app');
+            
+            // URL del servidor Streamlit (puedes cambiar esto)
+            const streamlitUrl = 'http://localhost:8501';
+            
+            // Crear iframe para cargar Streamlit
+            const iframe = document.createElement('iframe');
+            iframe.src = streamlitUrl;
+            iframe.onload = function() {
+                appDiv.innerHTML = '';
+                appDiv.appendChild(iframe);
+            };
+            
+            iframe.onerror = function() {
+                appDiv.innerHTML = `
+                    <div class="loading">
+                        <div>
+                            <h2>❌ Error de Conexión</h2>
+                            <p>No se pudo conectar al servidor</p>
+                            <button onclick="location.reload()">Reintentar</button>
+                        </div>
+                    </div>
+                `;
+            };
+        });
+
+        // Registrar Service Worker para PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => console.log('SW registrado:', registration))
+                .catch(error => console.log('Error SW:', error));
+        }
+
+        // Función global para imprimir desde Streamlit
+        window.imprimirTicket = async function(ventaData) {
+            try {
+                if (!window.printerService.isConnected) {
+                    const connected = await window.printerService.connectBluetooth();
+                    if (!connected) {
+                        alert('No se pudo conectar a la impresora');
+                        return false;
+                    }
+                }
+                
+                await window.printerService.print(ventaData);
+                return true;
+            } catch (error) {
+                console.error('Error imprimiendo:', error);
+                alert('Error al imprimir: ' + error.message);
+                return false;
+            }
+        };
+
+        // Función para conectar impresora manualmente
+        window.conectarImpresora = async function() {
+            try {
+                const connected = await window.printerService.connectBluetooth();
+                if (connected) {
+                    alert('Impresora conectada exitosamente');
+                } else {
+                    alert('No se pudo conectar a la impresora');
+                }
+                return connected;
+            } catch (error) {
+                alert('Error conectando impresora: ' + error.message);
+                return false;
+            }
+        };
+    </script>
+</body>
+</html>
