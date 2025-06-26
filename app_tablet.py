@@ -123,10 +123,10 @@ def load_page(page_name):
             from pages.inventario import show_inventario
             show_inventario()
         elif page_name == "Órdenes":
-            from pages.ordenes import show_ordenes
+            from pages.ordenes_new import show_ordenes
             show_ordenes()
         elif page_name == "Configuración":
-            from pages.configuracion import show_configuracion
+            from pages.configuracion_new import show_configuracion
             show_configuracion()
     except Exception as e:
         st.error(f"❌ Error cargando {page_name}: {e}")
