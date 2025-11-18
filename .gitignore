@@ -68,3 +68,55 @@ Thumbs.db
 # Tickets
 tickets/*.pdf
 reportes/*.pdf
+
+# Database journal files
+*.db-journal
+
+# Temporary test and debug files
+test_*.py
+debug_*.py
+temp_*.py
+fix_*.py
+check_*.py
+analyze_*.py
+inspect*.py
+investigate*.py
+migrar*.py
+migrate_*.py
+validar*.py
+validate_*.py
+verificar*.py
+verify_*.py
+
+# Backup files
+*_backup_*.py
+backup_*/
+src_pages/
+
+# Temporary markdown files
+*_COMPLETADO*.md
+*_RESUELTO*.md
+*_IMPLEMENTADA*.md
+*_CRITICA*.md
+CORRECCION*.md
+ERRORES*.md
+SISTEMA_*.md
+MEJORAS*.md
+MIGRACION*.md
+DEPLOYMENT_GUIDE.md
+DEPLOY_*.md
+SYNC_*.md
+TAREA_*.md
+SOLUCION_*.md
+NAVEGACION_*.md
+OPTIMIZACION_*.md
+PROBLEMA_*.md
+RENDER_*.md
+RESOLUCION_*.md
+
+# Validation reports
+validation_report_*.json
+
+# Development tools (keep in repo if needed)
+# dev_tools.sh
+# sync_github.sh
