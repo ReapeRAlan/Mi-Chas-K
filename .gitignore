@@ -90,6 +90,15 @@ verify_*.py
 
 # Backup files
 *_backup_*.py
+*_simple.py
+*_simple_*.py
+*_new.py
+*_improved.py
+*_optimized_backup.py
+*_direct_backup.py
+*_hybrid_backup.py
+*_corrected.py
+*_fixed_backup.py
 backup_*/
 src_pages/
 
