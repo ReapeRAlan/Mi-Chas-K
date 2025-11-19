@@ -7,7 +7,7 @@ from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 import logging
-from database.connection import execute_query, execute_update
+from database.connection_dual import execute_query, execute_update, execute_insert
 from utils.timezone_utils import get_mexico_datetime  # Import al inicio
 
 # Configurar logging
@@ -25,20 +25,21 @@ class Producto:
     nombre: str = ""
     precio: float = 0.0
     stock: int = 0
-    categoria: str = "General"
+    categoria_id: Optional[int] = None
     codigo_barras: Optional[str] = None
     descripcion: str = ""
     activo: bool = True
+    imagen_url: Optional[str] = None
     fecha_creacion: Optional[datetime] = None
-    fecha_modificacion: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
 
     @classmethod
     def get_all(cls, activos_solamente: bool = True) -> List['Producto']:
         """Obtiene todos los productos"""
         query = "SELECT * FROM productos"
         if activos_solamente:
-            query += " WHERE activo = TRUE"
-        query += " ORDER BY categoria, nombre"
+            query += " WHERE activo = TRUE OR activo = 1"
+        query += " ORDER BY categoria_id, nombre"
         
         rows = execute_query(query)
         productos = []
@@ -59,11 +60,11 @@ class Producto:
         return None
     
     @classmethod
-    def get_by_categoria(cls, categoria: str) -> List['Producto']:
+    def get_by_categoria(cls, categoria_id: int) -> List['Producto']:
         """Obtiene productos por categoría"""
         rows = execute_query(
-            "SELECT * FROM productos WHERE categoria = %s AND activo = TRUE ORDER BY nombre", 
-            (categoria,)
+            "SELECT * FROM productos WHERE categoria_id = %s AND (activo = TRUE OR activo = 1) ORDER BY nombre", 
+            (categoria_id,)
         )
         productos = []
         for row in rows:
@@ -83,7 +84,7 @@ class Producto:
             """
             params = (self.nombre, self.precio, self.stock, self.categoria, 
                      self.codigo_barras, self.descripcion, self.activo)
-            self.id = execute_update(query, params)
+            self.id = execute_insert(query, params)
         else:
             # Actualizar producto existente
             query = """
@@ -166,25 +167,37 @@ class Venta:
         return ventas
     
     def save(self) -> int:
-        """Guarda la venta - optimizado para evitar múltiples llamadas de timezone"""
+        """Guarda la venta - adaptado al schema real de SQLite"""
         try:
             if self.fecha is None:
                 self.fecha = get_mexico_datetime()
                 logger.info(f"⚠️ Fecha era None, asignada: {self.fecha}")
             else:
                 logger.info(f"✅ Fecha ya establecida: {self.fecha}")
-                
+            
+            # Schema real de SQLite: id, fecha, total, vendedor_id, metodo_pago, notas, fecha_creacion
+            # Nota: vendedor_id no se usa, guardamos vendedor como texto en notas si es necesario
             query = """
-                INSERT INTO ventas (total, metodo_pago, descuento, impuestos, fecha, vendedor, observaciones, estado)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
+                INSERT INTO ventas (fecha, total, metodo_pago, notas, fecha_creacion)
+                VALUES (%s, %s, %s, %s, %s)
             """
-            params = (self.total, self.metodo_pago, self.descuento, 
-                     self.impuestos, self.fecha, self.vendedor, self.observaciones, self.estado)
+            
+            # Combinar observaciones y vendedor en notas
+            notas_completas = f"Vendedor: {self.vendedor}"
+            if self.observaciones:
+                notas_completas += f" | {self.observaciones}"
+            
+            params = (
+                self.fecha,
+                self.total,
+                self.metodo_pago,
+                notas_completas,
+                self.fecha  # fecha_creacion = fecha de venta
+            )
             
             logger.info(f"💾 Guardando venta con parámetros: Total=${self.total}, Fecha={self.fecha}")
             
-            result_id = execute_update(query, params)
+            result_id = execute_insert(query, params)
             self.id = result_id
             
             logger.info(f"✅ Venta #{result_id} guardada exitosamente - Total: ${self.total} - Fecha: {self.fecha}")
@@ -223,7 +236,7 @@ class DetalleVenta:
         """
         params = (self.venta_id, self.producto_id, self.cantidad, 
                  self.precio_unitario, self.subtotal)
-        self.id = execute_update(query, params)
+        self.id = execute_insert(query, params)
         return self.id or 0
 
 @dataclass
@@ -334,7 +347,7 @@ class Categoria:
                     RETURNING id
                 """
                 params = (self.nombre, self.descripcion, self.activo, self.fecha_creacion)
-                self.id = execute_update(query, params)
+                self.id = execute_insert(query, params)
             else:
                 # Actualizar categoría existente
                 query = """
@@ -545,7 +558,7 @@ class GastoDiario:
             """
             params = (self.fecha, self.concepto, self.monto, self.categoria, 
                      self.descripcion, self.comprobante, self.vendedor, self.fecha_registro)
-            self.id = execute_update(query, params)
+            self.id = execute_insert(query, params)
         else:
             query = """
                 UPDATE gastos_diarios 
@@ -618,7 +631,7 @@ class CorteCaja:
             params = (self.fecha, self.dinero_inicial, self.dinero_final, self.ventas_efectivo,
                      self.ventas_tarjeta, self.total_gastos, self.diferencia, self.observaciones,
                      self.vendedor, self.fecha_registro)
-            self.id = execute_update(query, params)
+            self.id = execute_insert(query, params)
         else:
             query = """
                 UPDATE cortes_caja 
@@ -637,13 +650,16 @@ class CorteCaja:
 class Vendedor:
     id: Optional[int] = None
     nombre: str = ""
+    apellido: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
     activo: bool = True
-    fecha_registro: Optional[datetime] = None
+    fecha_creacion: Optional[datetime] = None
 
     @classmethod
     def get_all_activos(cls) -> List['Vendedor']:
         """Obtiene todos los vendedores activos"""
-        query = "SELECT * FROM vendedores WHERE activo = TRUE ORDER BY nombre"
+        query = "SELECT id, nombre, apellido, email, telefono, activo, fecha_creacion FROM vendedores WHERE activo = 1 OR activo = TRUE ORDER BY nombre"
         rows = execute_query(query)
         return [cls(**dict(row)) for row in rows]
 
@@ -656,24 +672,23 @@ class Vendedor:
 
     def save(self) -> int:
         """Guarda el vendedor"""
-        if self.fecha_registro is None:
+        if self.fecha_creacion is None:
             from utils.timezone_utils import get_mexico_datetime
-            self.fecha_registro = get_mexico_datetime()
+            self.fecha_creacion = get_mexico_datetime()
             
         if self.id is None:
             query = """
-                INSERT INTO vendedores (nombre, activo, fecha_registro)
-                VALUES (%s, %s, %s)
-                RETURNING id
+                INSERT INTO vendedores (nombre, apellido, email, telefono, activo, fecha_creacion)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """
-            params = (self.nombre, self.activo, self.fecha_registro)
-            self.id = execute_update(query, params)
+            params = (self.nombre, self.apellido, self.email, self.telefono, self.activo, self.fecha_creacion)
+            self.id = execute_insert(query, params)
         else:
             query = """
                 UPDATE vendedores 
-                SET nombre = %s, activo = %s
+                SET nombre = %s, apellido = %s, email = %s, telefono = %s, activo = %s
                 WHERE id = %s
             """
-            params = (self.nombre, self.activo, self.id)
+            params = (self.nombre, self.apellido, self.email, self.telefono, self.activo, self.id)
             execute_update(query, params)
         return self.id or 0

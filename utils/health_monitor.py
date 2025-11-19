@@ -5,7 +5,7 @@ import streamlit as st
 import time
 import os
 from datetime import datetime
-from database.connection import get_db_connection
+from database.connection_dual import get_db_connection
 from utils.logging_config import log_database_operation
 import logging
 

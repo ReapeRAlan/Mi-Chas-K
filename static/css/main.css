@@ -1,0 +1,438 @@
+/* 
+ * MiChaska POS - Custom Styles
+ * Optimizado para tablets y dispositivos móviles
+ */
+
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #198754;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #0dcaf0;
+    --dark-color: #212529;
+    --light-bg: #f8f9fa;
+    --border-radius: 8px;
+    --transition-speed: 0.3s;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: var(--light-bg);
+    overflow-x: hidden;
+}
+
+/* Touch-friendly adjustments */
+@media (max-width: 768px) {
+    .btn {
+        min-height: 48px;
+        font-size: 1rem;
+    }
+    
+    .form-control, .form-select {
+        min-height: 48px;
+        font-size: 1rem;
+    }
+}
+
+/* Navbar */
+.navbar-brand {
+    font-size: 1.5rem;
+}
+
+.navbar-nav .nav-link {
+    font-weight: 500;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin: 0 0.25rem;
+    transition: all var(--transition-speed);
+}
+
+.navbar-nav .nav-link:hover,
+.navbar-nav .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Main Content */
+.main-content {
+    min-height: calc(100vh - 70px);
+    padding-bottom: 2rem;
+}
+
+/* Cards */
+.card {
+    border: none;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.card-header {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+    font-weight: 600;
+}
+
+/* Producto Card */
+.producto-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    cursor: pointer;
+    transition: all var(--transition-speed);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.producto-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+    transform: translateY(-2px);
+}
+
+.producto-card:active {
+    transform: translateY(0);
+}
+
+.producto-card .categoria-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: var(--info-color);
+    color: white;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.producto-card .nombre {
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+    color: var(--dark-color);
+}
+
+.producto-card .precio {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--success-color);
+    margin-top: auto;
+}
+
+.producto-card .stock {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.producto-card .stock.bajo {
+    color: var(--danger-color);
+    font-weight: 600;
+}
+
+/* Carrito Item */
+.carrito-item {
+    background: #f8f9fa;
+    border-left: 4px solid var(--success-color);
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    margin-bottom: 0.75rem;
+    transition: all var(--transition-speed);
+}
+
+.carrito-item:hover {
+    background: #e9ecef;
+}
+
+.carrito-item .item-nombre {
+    font-weight: 600;
+    color: var(--dark-color);
+    margin-bottom: 0.25rem;
+}
+
+.carrito-item .item-precio {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+.carrito-item .item-subtotal {
+    font-weight: 700;
+    color: var(--success-color);
+    font-size: 1.1rem;
+}
+
+.carrito-item .cantidad-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.carrito-item .cantidad-control .btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.carrito-item .cantidad-control input {
+    width: 60px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Total Display */
+.total-display {
+    background: linear-gradient(135deg, var(--success-color), #20c997);
+    color: white;
+    box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3);
+}
+
+/* Botones Principales */
+.btn-lg {
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: var(--border-radius);
+}
+
+.btn-success {
+    background: var(--success-color);
+    border: none;
+}
+
+.btn-success:hover {
+    background: #157347;
+    transform: scale(1.02);
+}
+
+.btn-success:active {
+    transform: scale(0.98);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+}
+
+.loading-overlay .spinner-border {
+    width: 4rem;
+    height: 4rem;
+}
+
+/* Toast Personalizado */
+.toast {
+    min-width: 300px;
+}
+
+.toast.show {
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+/* Mapa */
+#mapContainer {
+    border: 2px solid #dee2e6;
+    z-index: 1;
+}
+
+.leaflet-container {
+    border-radius: var(--border-radius);
+}
+
+/* Estado de ubicación */
+#ubicacionStatus .alert {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Badges */
+.badge {
+    padding: 0.5rem 0.75rem;
+    font-weight: 500;
+}
+
+/* Responsive Tables */
+.table-responsive {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table thead {
+    background: var(--primary-color);
+    color: white;
+}
+
+.table tbody tr:hover {
+    background: rgba(13, 110, 253, 0.05);
+}
+
+/* Stats Cards */
+.stat-card {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all var(--transition-speed);
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.stat-card .stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--dark-color);
+    margin-bottom: 0.25rem;
+}
+
+.stat-card .stat-label {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+/* Form Controls Mejorados */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+}
+
+/* Scrollbars Personalizados */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Print Styles */
+@media print {
+    .navbar,
+    .btn,
+    .no-print {
+        display: none !important;
+    }
+    
+    .main-content {
+        margin: 0;
+        padding: 0;
+    }
+}
+
+/* Tablet Optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .producto-card {
+        padding: 1.25rem;
+    }
+    
+    .producto-card .nombre {
+        font-size: 1.2rem;
+    }
+    
+    .producto-card .precio {
+        font-size: 1.75rem;
+    }
+}
+
+/* Mobile Optimizations */
+@media (max-width: 767px) {
+    .navbar-brand {
+        font-size: 1.2rem;
+    }
+    
+    .card-header h5 {
+        font-size: 1rem;
+    }
+    
+    .producto-card .nombre {
+        font-size: 1rem;
+    }
+    
+    .producto-card .precio {
+        font-size: 1.3rem;
+    }
+    
+    .total-display h2 {
+        font-size: 1.75rem;
+    }
+}
+
+/* Accessibility */
+.btn:focus,
+.form-control:focus,
+.form-select:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Dark mode support (preparado para futuro) */
+@media (prefers-color-scheme: dark) {
+    /* Estilos dark mode aquí */
+}

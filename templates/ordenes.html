@@ -1,0 +1,755 @@
+{% extends "base.html" %}
+
+{% block title %}Órdenes y Entregas - MiChaska{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+<style>
+    /* ============================================
+       OCULTAR PANEL DE INSTRUCCIONES DE LEAFLET
+       ============================================ */
+    .leaflet-routing-container,
+    .leaflet-routing-alternatives-container,
+    .leaflet-routing-alt,
+    .leaflet-top.leaflet-right,
+    .leaflet-control-container .leaflet-routing-container,
+    .leaflet-bar.leaflet-routing-container,
+    div.leaflet-routing-container {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+    
+    /* Ocultar todos los elementos de routing */
+    [class*="leaflet-routing"] {
+        display: none !important;
+    }
+    
+    /* Asegurar que el mapa ocupe todo el espacio */
+    .leaflet-container {
+        position: relative !important;
+    }
+    
+    /* ============================================
+       MAPA
+       ============================================ */
+    #mapaRuta {
+        height: 500px;
+        width: 100%;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border: 3px solid #e0e0e0;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+    
+    /* ============================================
+       CARDS MODERNOS
+       ============================================ */
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        overflow: hidden;
+        background: white;
+    }
+    
+    .card:hover {
+        box-shadow: 0 10px 35px rgba(0,0,0,0.15);
+        transform: translateY(-5px);
+    }
+    
+    .card-header {
+        border-bottom: none;
+        font-weight: 700;
+        padding: 1.25rem 1.5rem;
+        background: linear-gradient(135deg, var(--bs-primary) 0%, #0a58ca 100%);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .card-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        animation: shimmer 3s infinite;
+    }
+    
+    @keyframes shimmer {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(-20px, -20px); }
+    }
+    
+    .card-header.bg-success {
+        background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%) !important;
+    }
+    
+    .card-header.bg-warning {
+        background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%) !important;
+        color: #000 !important;
+    }
+    
+    .card-header.bg-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #0c7c8c 100%) !important;
+    }
+    
+    .card-header.bg-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #bd2130 100%) !important;
+    }
+    
+    /* ============================================
+       PRODUCTOS
+       ============================================ */
+    .producto-item {
+        padding: 15px 20px;
+        border-left: 5px solid #0d6efd;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        margin-bottom: 10px;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .producto-item:hover {
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        transform: translateX(10px) scale(1.02);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        border-left-width: 8px;
+    }
+    
+    .producto-item input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        accent-color: #28a745;
+    }
+    
+    /* ============================================
+       INFORMACIÓN DE RUTA
+       ============================================ */
+    .ruta-info-card {
+        padding: 25px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .ruta-info-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        animation: rotate 10s linear infinite;
+    }
+    
+    @keyframes rotate {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .ruta-info-card h6 {
+        font-weight: 700;
+        margin-bottom: 15px;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .tiempo-estimado {
+        font-size: 3rem;
+        font-weight: 800;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        position: relative;
+        z-index: 1;
+    }
+    
+    .direccion-grande {
+        font-size: 1.2rem;
+        line-height: 1.8;
+        font-weight: 500;
+    }
+    
+    /* ============================================
+       BADGES MODERNOS
+       ============================================ */
+    .badge {
+        padding: 8px 16px;
+        font-weight: 700;
+        border-radius: 25px;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+    }
+    
+    .orden-badge {
+        font-size: 1rem;
+        padding: 0.75rem 1.5rem;
+    }
+    
+    /* ============================================
+       TABLA DE ÓRDENES
+       ============================================ */
+    .table {
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .table thead th {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        letter-spacing: 1px;
+        border: none;
+        padding: 18px 15px;
+    }
+    
+    .table tbody tr {
+        transition: all 0.3s ease;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .table tbody tr:hover {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* ============================================
+       BOTONES PREMIUM
+       ============================================ */
+    .btn {
+        border-radius: 12px;
+        padding: 12px 24px;
+        font-weight: 700;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        border: none;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.6s, height 0.6s;
+    }
+    
+    .btn:hover::before {
+        width: 300px;
+        height: 300px;
+    }
+    
+    .btn:hover {
+        transform: translateY(-3px) scale(1.05);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-success {
+        background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
+        box-shadow: 0 4px 15px rgba(86, 171, 47, 0.4);
+    }
+    
+    .btn-danger {
+        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        box-shadow: 0 4px 15px rgba(235, 51, 73, 0.4);
+    }
+    
+    .btn-warning {
+        background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%);
+        color: #000;
+        box-shadow: 0 4px 15px rgba(242, 153, 74, 0.4);
+    }
+    
+    .btn-info {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.4);
+    }
+    
+    .btn-secondary {
+        background: linear-gradient(135deg, #525252 0%, #3d3d3d 100%);
+        box-shadow: 0 4px 15px rgba(82, 82, 82, 0.4);
+    }
+    
+    .btn-lg {
+        padding: 15px 30px;
+        font-size: 1.1rem;
+    }
+    
+    /* ============================================
+       ESTADÍSTICAS
+       ============================================ */
+    .stats-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 5px;
+        background: linear-gradient(90deg, var(--bs-primary), var(--bs-info));
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-10px) scale(1.05);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+    }
+    
+    .stats-card h3 {
+        font-size: 3rem;
+        font-weight: 800;
+        margin-bottom: 10px;
+        background: linear-gradient(135deg, var(--bs-primary), var(--bs-info));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stats-card p {
+        margin: 0;
+        color: #6c757d;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: 600;
+    }
+    
+    .stats-card i {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        opacity: 0.1;
+    }
+    
+    /* ============================================
+       VISTA DETALLE
+       ============================================ */
+    .orden-detalle {
+        display: none;
+    }
+    
+    .orden-detalle.active {
+        display: block;
+        animation: fadeInScale 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    
+    @keyframes fadeInScale {
+        from {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    
+    /* ============================================
+       HEADER DE PÁGINA
+       ============================================ */
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 20px;
+        margin-bottom: 2.5rem;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .page-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+    
+    .page-header h2 {
+        margin: 0;
+        font-weight: 800;
+        font-size: 2.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        position: relative;
+        z-index: 1;
+    }
+    
+    .page-header p {
+        position: relative;
+        z-index: 1;
+    }
+    
+    /* ============================================
+       INSTRUCCIONES DE NAVEGACIÓN
+       ============================================ */
+    .instruccion-paso {
+        padding: 15px 20px;
+        border-left: 5px solid #667eea;
+        background: white;
+        margin-bottom: 12px;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .instruccion-paso::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 5px;
+        height: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        transition: height 0.3s ease;
+    }
+    
+    .instruccion-paso:hover::before {
+        height: 100%;
+    }
+    
+    .instruccion-paso:hover {
+        border-left-width: 8px;
+        transform: translateX(10px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.12);
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    }
+    
+    .instruccion-paso .numero {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 35px;
+        height: 35px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        font-weight: 800;
+        font-size: 0.9rem;
+        margin-right: 15px;
+        box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+    }
+    
+    /* ============================================
+       FILTROS
+       ============================================ */
+    .filter-group {
+        background: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        margin-bottom: 25px;
+    }
+    
+    .form-control, .form-select {
+        border-radius: 10px;
+        border: 2px solid #e0e0e0;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        transform: scale(1.02);
+    }
+    
+    /* ============================================
+       SCROLLBAR PERSONALIZADO
+       ============================================ */
+    ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        border: 2px solid #f1f1f1;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+    
+    /* ============================================
+       RESPONSIVE
+       ============================================ */
+    @media (max-width: 768px) {
+        #mapaRuta {
+            height: 350px;
+        }
+        
+        .stats-card h3 {
+            font-size: 2.5rem;
+        }
+        
+        .page-header h2 {
+            font-size: 2rem;
+        }
+        
+        .tiempo-estimado {
+            font-size: 2.5rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Moderno -->
+    <div class="page-header">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h2><i class="bi bi-truck"></i> Gestión de Órdenes y Entregas</h2>
+                <p class="mb-0 mt-2" style="opacity: 0.9; font-size: 1.1rem;">Sistema de seguimiento y navegación GPS en tiempo real</p>
+            </div>
+            <div class="text-end">
+                <i class="bi bi-geo-alt-fill" style="font-size: 4rem; opacity: 0.2;"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vista Lista de Órdenes -->
+    <div id="vistaLista">
+        <!-- Estadísticas Mejoradas -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="stats-card text-center" style="border-left: 5px solid #ffc107;">
+                    <i class="bi bi-clock-history" style="font-size: 3rem; color: #ffc107;"></i>
+                    <h3 id="totalPendientes" class="text-warning">0</h3>
+                    <p>Pendientes</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center" style="border-left: 5px solid #0dcaf0;">
+                    <i class="bi bi-truck" style="font-size: 3rem; color: #0dcaf0;"></i>
+                    <h3 id="totalEnCamino" class="text-info">0</h3>
+                    <p>En Camino</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center" style="border-left: 5px solid #28a745;">
+                    <i class="bi bi-check-circle-fill" style="font-size: 3rem; color: #28a745;"></i>
+                    <h3 id="totalEntregadas" class="text-success">0</h3>
+                    <p>Entregadas Hoy</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card text-center" style="border-left: 5px solid #dc3545;">
+                    <i class="bi bi-x-circle-fill" style="font-size: 3rem; color: #dc3545;"></i>
+                    <h3 id="totalCanceladas" class="text-danger">0</h3>
+                    <p>Canceladas</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-white">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="mb-0">Lista de Entregas</h5>
+                    </div>
+                    <div class="col-auto">
+                        <select id="filtroEstado" class="form-select">
+                            <option value="">Todos los estados</option>
+                            <option value="Pendiente">Pendiente</option>
+                            <option value="En Camino">En Camino</option>
+                            <option value="Entregado">Entregado</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="entregasContainer" class="table-responsive">
+                    <!-- Se carga dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vista Detalle de Orden para Repartidor -->
+    <div id="vistaDetalle" class="orden-detalle">
+        <div class="mb-4">
+            <button class="btn btn-secondary btn-lg" onclick="volverALista()" style="box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                <i class="bi bi-arrow-left"></i> Volver a la Lista
+            </button>
+        </div>
+
+        <div class="row g-4">
+            <!-- Columna Izquierda: Info de Orden -->
+            <div class="col-lg-6">
+                <!-- Info Principal -->
+                <div class="card mb-3 ruta-info-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h4 class="mb-1">Orden #<span id="detalleVentaId">-</span></h4>
+                                <p class="text-muted mb-0"><i class="bi bi-clock"></i> <span id="detalleFecha">-</span></p>
+                            </div>
+                            <span id="detalleEstadoBadge" class="badge orden-badge">-</span>
+                        </div>
+                        
+                        <div class="alert alert-info mb-3">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <i class="bi bi-geo-alt-fill fs-4"></i>
+                                    <strong class="ms-2">Distancia:</strong>
+                                </div>
+                                <span class="fs-4 fw-bold" id="detalleDistancia">-</span>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-primary mb-3">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <i class="bi bi-stopwatch-fill fs-4"></i>
+                                    <strong class="ms-2">Tiempo Estimado:</strong>
+                                </div>
+                                <span class="tiempo-estimado" id="detalleTiempoEstimado">-</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="fw-bold mb-2"><i class="bi bi-pin-map-fill"></i> Dirección de Entrega:</label>
+                            <div class="p-3 bg-light rounded direccion-grande" id="detalleDireccion">-</div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center p-3 bg-success bg-opacity-10 rounded">
+                            <strong class="fs-5">Total a Cobrar:</strong>
+                            <span class="fs-3 fw-bold text-success" id="detalleTotal">$0.00</span>
+                        </div>
+
+                        <div class="mt-3" id="detalleNotas">
+                            <!-- Notas si existen -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Productos -->
+                <div class="card" style="border-top: 4px solid #0d6efd;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-bag-check-fill"></i> Productos a Entregar</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="listaProductosEntrega" class="list-group list-group-flush">
+                            <!-- Se carga dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha: Mapa y Ruta -->
+            <div class="col-lg-6">
+                <!-- Mapa Mejorado -->
+                <div class="card mb-3" style="border-top: 4px solid #28a745;">
+                    <div class="card-header bg-success text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-map-fill"></i> Mapa de Ruta</h5>
+                            <button class="btn btn-sm btn-light" onclick="centrarEnRepartidor()" title="Centrar en mi ubicación" style="box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                                <i class="bi bi-geo-fill"></i> Mi Ubicación
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="mapaRuta"></div>
+                    </div>
+                </div>
+
+                <!-- Instrucciones de Navegación Mejoradas -->
+                <div class="card" style="border-top: 4px solid #0dcaf0;">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-signpost-2-fill"></i> Instrucciones de Navegación</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="instruccionesRuta">
+                            <p class="text-muted">Calculando mejor ruta...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Acciones -->
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary btn-lg" onclick="iniciarEntrega()">
+                                <i class="bi bi-truck"></i> Iniciar Entrega
+                            </button>
+                            <button class="btn btn-success btn-lg" onclick="completarEntrega()">
+                                <i class="bi bi-check-circle-fill"></i> Marcar como Entregada
+                            </button>
+                            <button class="btn btn-danger btn-lg" onclick="cancelarEntrega()">
+                                <i class="bi bi-x-circle-fill"></i> Cancelar Entrega
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+<script src="{{ url_for('static', filename='js/ordenes.js') }}"></script>
+{% endblock %}
